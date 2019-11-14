@@ -126,14 +126,15 @@ class ContentOpenWith extends PureComponent<Props, State> {
     constructor(props: Props) {
         super(props);
 
-        const { token, apiHost, clientName, requestInterceptor, responseInterceptor } = props;
+        const { token, apiHost, clientName, language, requestInterceptor, responseInterceptor } = props;
         this.id = uniqueid('bcow_');
         this.api = new API({
-            token,
             apiHost,
             clientName,
+            language,
             requestInterceptor,
             responseInterceptor,
+            token,
         });
 
         // Clone initial state to allow for state reset on new files
@@ -224,10 +225,10 @@ class ContentOpenWith extends PureComponent<Props, State> {
      * @return {void}
      */
     fetchOpenWithData(): void {
-        const { fileId, language }: Props = this.props;
+        const { fileId }: Props = this.props;
         this.api
             .getOpenWithAPI(false)
-            .getOpenWithIntegrations(fileId, this.fetchOpenWithSuccessHandler, this.fetchErrorHandler, language);
+            .getOpenWithIntegrations(fileId, this.fetchOpenWithSuccessHandler, this.fetchErrorHandler);
     }
 
     /**
@@ -322,16 +323,6 @@ class ContentOpenWith extends PureComponent<Props, State> {
     };
 
     /**
-     * Called when the Open With button gets new properties
-     *
-     * @private
-     * @return {void}
-     */
-    componentWillReceiveProps(): void {
-        /* no-op */
-    }
-
-    /**
      * Click handler when an integration is clicked
      *
      * @private
@@ -357,9 +348,7 @@ class ContentOpenWith extends PureComponent<Props, State> {
         }
 
         // These window features will open the new window directly on top of the current window at the same
-        const windowFeatures = `left=${window.screenX},top=${window.screenY},height=${window.outerHeight},width=${
-            window.innerWidth
-        },toolbar=0`;
+        const windowFeatures = `left=${window.screenX},top=${window.screenY},height=${window.outerHeight},width=${window.innerWidth},toolbar=0`;
 
         // window.open() is immediately invoked to avoid popup-blockers
         // The name is included to be the target of a form if the integration is a POST integration.

@@ -11,15 +11,25 @@ import Tooltip from '../../components/tooltip/Tooltip';
 import './SidebarNavButton.scss';
 
 type Props = {
+    'data-resin-target'?: string,
+    'data-testid'?: string,
     children: React.Node,
-    interactionTarget: string,
+    elementId?: string,
     isOpen?: boolean,
-    onNavigate?: (SyntheticEvent<>, NavigateOptions) => void,
     sidebarView: string,
     tooltip: React.Node,
 };
 
-const SidebarNavButton = ({ children, interactionTarget, isOpen, onNavigate, sidebarView, tooltip }: Props) => {
+const SidebarNavButton = React.forwardRef<Props, React.Ref<any>>((props: Props, ref: React.Ref<any>) => {
+    const {
+        'data-resin-target': dataResinTarget,
+        'data-testid': dataTestId,
+        children,
+        elementId = '',
+        isOpen,
+        sidebarView,
+        tooltip,
+    } = props;
     const sidebarPath = `/${sidebarView}`;
 
     return (
@@ -27,25 +37,30 @@ const SidebarNavButton = ({ children, interactionTarget, isOpen, onNavigate, sid
             {({ match }) => {
                 const isMatch = !!match;
                 const isActive = () => isMatch && !!isOpen;
+                const isActiveValue = isActive();
                 const isToggle = isMatch && match.isExact;
+                const sidebarState = { open: isToggle ? !isOpen : true };
+                const id = `${elementId}${elementId === '' ? '' : '_'}${sidebarView}`;
 
                 return (
-                    <Tooltip position="middle-left" text={tooltip}>
+                    <Tooltip position="middle-left" text={tooltip} isTabbable={false}>
                         <NavButton
-                            aria-selected={isActive()}
                             activeClassName="bcs-is-selected"
+                            aria-selected={isActiveValue}
+                            aria-controls={`${id}-content`}
                             className="bcs-NavButton"
-                            data-resin-target={interactionTarget}
-                            data-testid={interactionTarget}
+                            data-resin-target={dataResinTarget}
+                            data-testid={dataTestId}
+                            getDOMRef={ref}
+                            id={id}
                             isActive={isActive}
-                            onClick={event => {
-                                if (onNavigate) {
-                                    onNavigate(event, { isToggle });
-                                }
-                            }}
                             replace={isToggle}
                             role="tab"
-                            to={sidebarPath}
+                            tabIndex={isActiveValue ? '0' : '-1'}
+                            to={{
+                                pathname: sidebarPath,
+                                state: sidebarState,
+                            }}
                             type="button"
                         >
                             {children}
@@ -55,6 +70,6 @@ const SidebarNavButton = ({ children, interactionTarget, isOpen, onNavigate, sid
             }}
         </Route>
     );
-};
+});
 
 export default SidebarNavButton;

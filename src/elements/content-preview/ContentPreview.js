@@ -5,7 +5,7 @@
  */
 
 import 'regenerator-runtime/runtime';
-import React, { PureComponent } from 'react';
+import * as React from 'react';
 import classNames from 'classnames';
 import uniqueid from 'lodash/uniqueId';
 import throttle from 'lodash/throttle';
@@ -15,6 +15,7 @@ import getProp from 'lodash/get';
 import flow from 'lodash/flow';
 import noop from 'lodash/noop';
 import Measure from 'react-measure';
+import type { RouterHistory } from 'react-router-dom';
 import { decode } from '../../utils/keys';
 import makeResponsive from '../common/makeResponsive';
 import Internationalize from '../common/Internationalize';
@@ -45,6 +46,8 @@ import {
     ORIGIN_CONTENT_PREVIEW,
     ERROR_CODE_UNKNOWN,
 } from '../../constants';
+import type { ErrorType } from '../common/flowTypes';
+import type { VersionChangeCallback } from '../content-sidebar/versions';
 import '../common/fonts.scss';
 import '../common/base.scss';
 import './ContentPreview.scss';
@@ -65,7 +68,9 @@ type Props = {
     fileOptions?: Object,
     getInnerRef: () => ?HTMLElement,
     hasHeader?: boolean,
+    history?: RouterHistory,
     isLarge: boolean,
+    isVeryLarge?: boolean,
     language: string,
     logoUrl?: string,
     measureRef: Function,
@@ -74,7 +79,7 @@ type Props = {
     onDownload: Function,
     onLoad: Function,
     onNavigate: Function,
-    onVersionChange: OnVersionChange,
+    onVersionChange: VersionChangeCallback,
     previewLibraryVersion: string,
     requestInterceptor?: Function,
     responseInterceptor?: Function,
@@ -90,8 +95,8 @@ type Props = {
 
 type State = {
     currentFileId?: string,
+    error?: ErrorType,
     file?: BoxItem,
-    isFileError: boolean,
     isReloadNotificationVisible: boolean,
     isThumbnailSidebarOpen: boolean,
     prevFileIdProp?: string, // the previous value of the "fileId" prop. Needed to implement getDerivedStateFromProps
@@ -127,13 +132,8 @@ type PreviewMetrics = {
     value: number,
 };
 
-type PreviewError = {
-    error: {
-        code: string,
-        details: Object,
-        displayMessage: string,
-        message: string,
-    },
+type PreviewLibraryError = {
+    error: ErrorType,
 };
 
 const InvalidIdError = new Error('Invalid id for Preview!');
@@ -146,7 +146,7 @@ const LoadableSidebar = AsyncLoad({
     loader: () => import(/* webpackMode: "lazy", webpackChunkName: "content-sidebar" */ '../content-sidebar'),
 });
 
-class ContentPreview extends PureComponent<Props, State> {
+class ContentPreview extends React.PureComponent<Props, State> {
     id: string;
 
     props: Props;
@@ -156,6 +156,9 @@ class ContentPreview extends PureComponent<Props, State> {
     preview: any;
 
     api: API;
+
+    // Defines a generic type for ContentSidebar, since an import would interfere with code splitting
+    contentSidebar: { current: null | { refresh: Function } } = React.createRef();
 
     previewContainer: ?HTMLDivElement;
 
@@ -168,7 +171,7 @@ class ContentPreview extends PureComponent<Props, State> {
     updateVersionToCurrent: ?() => void;
 
     initialState: State = {
-        isFileError: false,
+        error: undefined,
         isReloadNotificationVisible: false,
         isThumbnailSidebarOpen: false,
     };
@@ -215,26 +218,28 @@ class ContentPreview extends PureComponent<Props, State> {
     constructor(props: Props) {
         super(props);
         const {
-            cache,
-            token,
-            sharedLink,
-            sharedLinkPassword,
             apiHost,
+            cache,
+            fileId,
+            language,
             requestInterceptor,
             responseInterceptor,
-            fileId,
+            sharedLink,
+            sharedLinkPassword,
+            token,
         } = props;
 
         this.id = uniqueid('bcpr_');
         this.api = new API({
-            cache,
-            token,
-            sharedLink,
-            sharedLinkPassword,
             apiHost,
+            cache,
             clientName: CLIENT_NAME_CONTENT_PREVIEW,
+            language,
             requestInterceptor,
             responseInterceptor,
+            sharedLink,
+            sharedLinkPassword,
+            token,
         });
         this.state = {
             ...this.initialState,
@@ -350,14 +355,16 @@ class ContentPreview extends PureComponent<Props, State> {
         const { file: prevFile, selectedVersion: prevSelectedVersion }: State = prevState;
         const prevSelectedVersionId = getProp(prevSelectedVersion, 'id');
         const selectedVersionId = getProp(selectedVersion, 'id');
-        const versionPath = 'file_version.id';
-        const prevFileVersionId = getProp(prevFile, versionPath);
-        const fileVersionId = getProp(file, versionPath);
+        const prevFileVersionId = getProp(prevFile, 'file_version.id');
+        const fileVersionId = getProp(file, 'file_version.id');
         let loadPreview = false;
 
         if (selectedVersionId !== prevSelectedVersionId) {
+            const isPreviousCurrent = fileVersionId === prevSelectedVersionId || !prevSelectedVersionId;
+            const isSelectedCurrent = fileVersionId === selectedVersionId || !selectedVersionId;
+
             // Load preview if the user has selected a non-current version of the file
-            loadPreview = !!selectedVersionId || prevSelectedVersionId !== fileVersionId;
+            loadPreview = !isPreviousCurrent || !isSelectedCurrent;
         } else if (fileVersionId && prevFileVersionId) {
             // Load preview if the file's current version ID has changed
             loadPreview = fileVersionId !== prevFileVersionId;
@@ -513,16 +520,17 @@ class ContentPreview extends PureComponent<Props, State> {
     /**
      * Handler for 'preview_error' preview event
      *
-     * @param {PreviewError} previewError - the error data emitted from preview
+     * @param {PreviewLibraryError} previewError - the error data emitted from preview
      * @return {void}
      */
-    onPreviewError = ({ error, ...rest }: PreviewError): void => {
+    onPreviewError = ({ error, ...rest }: PreviewLibraryError): void => {
         const { code = ERROR_CODE_UNKNOWN } = error;
+        const { onError } = this.props;
 
         // In case of error, there should be no thumbnail sidebar to account for
         this.setState({ isThumbnailSidebarOpen: false });
 
-        this.props.onError(
+        onError(
             error,
             code,
             {
@@ -692,8 +700,7 @@ class ContentPreview extends PureComponent<Props, State> {
         }
 
         const fileOpts = { ...fileOptions };
-        const typedId: string = getTypedFileId(fileId);
-        const token: TokenLiteral = await TokenService.getReadToken(typedId, tokenOrTokenFunction);
+        const token = typedId => TokenService.getReadTokens(typedId, tokenOrTokenFunction);
 
         if (selectedVersion) {
             fileOpts[fileId] = fileOpts[fileId] || {};
@@ -705,7 +712,7 @@ class ContentPreview extends PureComponent<Props, State> {
             enableThumbnailsSidebar,
             fileOptions: fileOpts,
             header: 'none',
-            headerElement: `#${this.id} .bcpr-header`,
+            headerElement: `#${this.id} .bcpr-PreviewHeader`,
             showAnnotations: this.canViewAnnotations(),
             showDownload: this.canDownload(),
             skipServerUpdate: true,
@@ -793,8 +800,14 @@ class ContentPreview extends PureComponent<Props, State> {
      * @return {void}
      */
     fetchFileErrorCallback = (fileError: ElementsXhrError, code: string): void => {
-        this.setState({ isFileError: true });
-        this.props.onError(fileError, code, {
+        const { onError } = this.props;
+        const errorCode = fileError.code || code;
+        const error = {
+            code: errorCode,
+            message: fileError.message,
+        };
+        this.setState({ error, file: undefined });
+        onError(fileError, errorCode, {
             error: fileError,
         });
     };
@@ -1072,6 +1085,19 @@ class ContentPreview extends PureComponent<Props, State> {
     };
 
     /**
+     * Refreshes the content sidebar panel
+     *
+     * @return {void}
+     */
+    refreshSidebar(): void {
+        const { current: contentSidebar } = this.contentSidebar;
+
+        if (contentSidebar) {
+            contentSidebar.refresh();
+        }
+    }
+
+    /**
      * Renders the file preview
      *
      * @inheritdoc
@@ -1080,7 +1106,6 @@ class ContentPreview extends PureComponent<Props, State> {
     render() {
         const {
             apiHost,
-            isLarge,
             token,
             language,
             messages,
@@ -1088,6 +1113,10 @@ class ContentPreview extends PureComponent<Props, State> {
             contentSidebarProps,
             contentOpenWithProps,
             hasHeader,
+            history,
+            isLarge,
+            isVeryLarge,
+            logoUrl,
             onClose,
             measureRef,
             sharedLink,
@@ -1097,8 +1126,8 @@ class ContentPreview extends PureComponent<Props, State> {
         }: Props = this.props;
 
         const {
+            error,
             file,
-            isFileError,
             isReloadNotificationVisible,
             currentFileId,
             isThumbnailSidebarOpen,
@@ -1117,6 +1146,7 @@ class ContentPreview extends PureComponent<Props, State> {
             return null;
         }
 
+        const errorCode = getProp(error, 'code');
         const currentVersionId = getProp(file, 'file_version.id');
         const selectedVersionId = getProp(selectedVersion, 'id', currentVersionId);
         const onHeaderClose = currentVersionId === selectedVersionId ? onClose : this.updateVersionToCurrent;
@@ -1129,6 +1159,7 @@ class ContentPreview extends PureComponent<Props, State> {
                     {hasHeader && (
                         <PreviewHeader
                             file={file}
+                            logoUrl={logoUrl}
                             token={token}
                             onClose={onHeaderClose}
                             onPrint={this.print}
@@ -1148,7 +1179,8 @@ class ContentPreview extends PureComponent<Props, State> {
                             ) : (
                                 <div className="bcpr-loading-wrapper">
                                     <PreviewLoading
-                                        isLoading={!isFileError}
+                                        errorCode={errorCode}
+                                        isLoading={!errorCode}
                                         loadingIndicatorProps={{
                                             size: 'large',
                                         }}
@@ -1158,6 +1190,7 @@ class ContentPreview extends PureComponent<Props, State> {
                             <PreviewNavigation
                                 collection={collection}
                                 currentIndex={this.getFileIndex()}
+                                history={history}
                                 onNavigateLeft={this.navigateLeft}
                                 onNavigateRight={this.navigateRight}
                             />
@@ -1165,13 +1198,16 @@ class ContentPreview extends PureComponent<Props, State> {
                         {file && (
                             <LoadableSidebar
                                 {...contentSidebarProps}
-                                isLarge={isLarge}
                                 apiHost={apiHost}
                                 token={token}
                                 cache={this.api.getCache()}
                                 fileId={currentFileId}
                                 getPreview={this.getPreview}
                                 getViewer={this.getViewer}
+                                history={history}
+                                isDefaultOpen={isLarge || isVeryLarge}
+                                language={language}
+                                ref={this.contentSidebar}
                                 sharedLink={sharedLink}
                                 sharedLinkPassword={sharedLinkPassword}
                                 requestInterceptor={requestInterceptor}

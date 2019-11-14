@@ -4,69 +4,104 @@
  * @author Box
  */
 
-import React from 'react';
-import getProp from 'lodash/get';
+import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import messages from './messages';
+import selectors from '../../common/selectors/version';
 import sizeUtil from '../../../utils/size';
 import VersionsItemActions from './VersionsItemActions';
 import VersionsItemButton from './VersionsItemButton';
 import VersionsItemBadge from './VersionsItemBadge';
+import VersionsItemRetention from './VersionsItemRetention';
 import { ReadableTime } from '../../../components/time';
-import type { VersionActionCallback } from './Versions';
-import { VERSION_DELETE_ACTION, VERSION_RESTORE_ACTION, VERSION_UPLOAD_ACTION } from '../../../constants';
+import {
+    VERSION_DELETE_ACTION,
+    VERSION_PROMOTE_ACTION,
+    VERSION_RESTORE_ACTION,
+    VERSION_UPLOAD_ACTION,
+} from '../../../constants';
+import type { VersionActionCallback } from './flowTypes';
 import './VersionsItem.scss';
 
 type Props = {
-    isCurrent: boolean,
-    isSelected: boolean,
+    fileId: string,
+    isCurrent?: boolean,
+    isSelected?: boolean,
+    isWatermarked?: boolean,
     onDelete?: VersionActionCallback,
     onDownload?: VersionActionCallback,
     onPreview?: VersionActionCallback,
     onPromote?: VersionActionCallback,
     onRestore?: VersionActionCallback,
     version: BoxItemVersion,
+    versionCount: number,
+    versionLimit: number,
 };
 
 const ACTION_MAP = {
     [VERSION_DELETE_ACTION]: messages.versionDeletedBy,
     [VERSION_RESTORE_ACTION]: messages.versionRestoredBy,
+    [VERSION_PROMOTE_ACTION]: messages.versionPromotedBy,
     [VERSION_UPLOAD_ACTION]: messages.versionUploadedBy,
 };
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
-const getActionMessage = action => ACTION_MAP[action] || ACTION_MAP[VERSION_UPLOAD_ACTION];
-
 const VersionsItem = ({
-    isCurrent,
-    isSelected,
+    fileId,
+    isCurrent = false,
+    isSelected = false,
+    isWatermarked = false,
     onDelete,
     onDownload,
     onPreview,
     onPromote,
     onRestore,
     version,
+    versionCount,
+    versionLimit,
 }: Props) => {
     const {
-        action = VERSION_UPLOAD_ACTION,
         created_at: createdAt,
         id: versionId,
         is_download_available,
-        modified_by: modifiedBy,
         permissions = {},
+        restored_at: restoredAt,
+        retention,
         size,
+        trashed_at: trashedAt,
         version_number: versionNumber,
+        version_promoted: versionPromoted,
     } = version;
-    const isDeleted = action === VERSION_DELETE_ACTION;
-    const isDisabled = isDeleted || !permissions.can_preview;
-    const isDownloadable = !!is_download_available;
+    const { can_delete, can_download, can_preview, can_upload } = permissions;
+    const { applied_at: retentionAppliedAt, disposition_at: retentionDispositionAt } = retention || {};
+    const retentionDispositionAtDate = retentionDispositionAt && new Date(retentionDispositionAt);
 
     // Version info helpers
-    const versionSize = sizeUtil(size);
-    const versionTimestamp = createdAt && new Date(createdAt).getTime();
-    const versionUserName = getProp(modifiedBy, 'name', <FormattedMessage {...messages.versionUserUnknown} />);
+    const versionAction = selectors.getVersionAction(version);
+    const versionInteger = versionNumber ? parseInt(versionNumber, 10) : 1;
+    const versionTime = restoredAt || trashedAt || createdAt;
+    const versionTimestamp = versionTime && new Date(versionTime).getTime();
+    const versionUserName = selectors.getVersionUser(version).name || (
+        <FormattedMessage {...messages.versionUserUnknown} />
+    );
 
-    // Version action helper
+    // Version state helpers
+    const isDeleted = versionAction === VERSION_DELETE_ACTION;
+    const isDownloadable = !!is_download_available;
+    const isLimited = versionCount - versionInteger >= versionLimit;
+    const isRestricted = isWatermarked && !isCurrent; // Watermarked files do not support prior version preview
+    const isRetained = !!retentionAppliedAt && (!retentionDispositionAtDate || retentionDispositionAtDate > new Date());
+
+    // Version action helpers
+    const canPreview = can_preview && !isDeleted && !isLimited && !isRestricted;
+    const showDelete = can_delete && !isDeleted && !isCurrent;
+    const showDownload = can_download && !isDeleted && isDownloadable;
+    const showPromote = can_upload && !isDeleted && !isCurrent;
+    const showRestore = can_delete && isDeleted;
+    const showPreview = canPreview && !isSelected;
+    const hasActions = showDelete || showDownload || showPreview || showPromote || showRestore;
+
+    // Version action callback helper
     const handleAction = (handler?: VersionActionCallback) => (): void => {
         if (handler) {
             handler(versionId);
@@ -74,56 +109,77 @@ const VersionsItem = ({
     };
 
     return (
-        <VersionsItemButton
-            className="bcs-VersionsItem"
-            isDisabled={isDisabled}
-            isSelected={isSelected}
-            onActivate={handleAction(onPreview)}
-        >
-            <div className="bcs-VersionsItem-badge">
-                <VersionsItemBadge isDisabled={isDeleted} versionNumber={versionNumber} />
-            </div>
-
-            <div className="bcs-VersionsItem-details">
-                {isCurrent && (
-                    <div className="bcs-VersionsItem-current">
-                        <FormattedMessage {...messages.versionCurrent} />
-                    </div>
-                )}
-                <div className="bcs-VersionsItem-log" data-testid="bcs-VersionsItem-log">
-                    <FormattedMessage {...getActionMessage(action)} values={{ name: versionUserName }} />
-                </div>
-                <div className="bcs-VersionsItem-info">
-                    {versionTimestamp && (
-                        <time className="bcs-VersionsItem-date" dateTime={createdAt}>
-                            <ReadableTime
-                                alwaysShowTime
-                                relativeThreshold={FIVE_MINUTES_MS}
-                                timestamp={versionTimestamp}
-                            />
-                        </time>
-                    )}
-                    {!!size && (
-                        <span className="bcs-VersionsItem-size" title={versionSize}>
-                            {versionSize}
-                        </span>
-                    )}
-                </div>
-            </div>
-
-            <VersionsItemActions
+        <div className="bcs-VersionsItem">
+            <VersionsItemButton
+                fileId={fileId}
                 isCurrent={isCurrent}
-                isDeleted={isDeleted}
-                isDownloadable={isDownloadable}
-                onDelete={handleAction(onDelete)}
-                onDownload={handleAction(onDownload)}
-                onPreview={handleAction(onPreview)}
-                onPromote={handleAction(onPromote)}
-                onRestore={handleAction(onRestore)}
-                permissions={permissions}
-            />
-        </VersionsItemButton>
+                isDisabled={!canPreview}
+                isSelected={isSelected}
+                onClick={handleAction(onPreview)}
+            >
+                <div className="bcs-VersionsItem-badge">
+                    <VersionsItemBadge versionNumber={versionNumber} />
+                </div>
+
+                <div className="bcs-VersionsItem-details">
+                    {isCurrent && (
+                        <div className="bcs-VersionsItem-current">
+                            <FormattedMessage {...messages.versionCurrent} />
+                        </div>
+                    )}
+
+                    <div className="bcs-VersionsItem-log" data-testid="bcs-VersionsItem-log" title={versionUserName}>
+                        <FormattedMessage
+                            {...ACTION_MAP[versionAction]}
+                            values={{ name: versionUserName, versionPromoted }}
+                        />
+                    </div>
+
+                    <div className="bcs-VersionsItem-info">
+                        {versionTimestamp && (
+                            <time className="bcs-VersionsItem-date" dateTime={versionTime}>
+                                <ReadableTime
+                                    alwaysShowTime
+                                    relativeThreshold={FIVE_MINUTES_MS}
+                                    timestamp={versionTimestamp}
+                                />
+                            </time>
+                        )}
+                        {!!size && <span className="bcs-VersionsItem-size">{sizeUtil(size)}</span>}
+                    </div>
+
+                    {isRetained && (
+                        <div className="bcs-VersionsItem-retention">
+                            <VersionsItemRetention retention={retention} />
+                        </div>
+                    )}
+
+                    {isLimited && hasActions && (
+                        <div className="bcs-VersionsItem-footer">
+                            <FormattedMessage {...messages.versionLimitExceeded} values={{ versionLimit }} />
+                        </div>
+                    )}
+                </div>
+            </VersionsItemButton>
+
+            {!isLimited && hasActions && (
+                <VersionsItemActions
+                    fileId={fileId}
+                    isCurrent={isCurrent}
+                    isRetained={isRetained}
+                    onDelete={handleAction(onDelete)}
+                    onDownload={handleAction(onDownload)}
+                    onPreview={handleAction(onPreview)}
+                    onPromote={handleAction(onPromote)}
+                    onRestore={handleAction(onRestore)}
+                    showDelete={showDelete}
+                    showDownload={showDownload}
+                    showPreview={showPreview}
+                    showPromote={showPromote}
+                    showRestore={showRestore}
+                />
+            )}
+        </div>
     );
 };
-
 export default VersionsItem;

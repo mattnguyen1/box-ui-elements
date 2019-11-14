@@ -11,21 +11,23 @@ import getProp from 'lodash/get';
 import AsyncLoad from '../../common/async-load';
 import FileInfo from './FileInfo';
 import IconClose from '../../../icons/general/IconClose';
+import IconDownload from '../../../icons/general/IconDownloadSolid';
 import IconDrawAnnotationMode from '../../../icons/annotations/IconDrawAnnotation';
 import IconPointAnnotation from '../../../icons/annotations/IconPointAnnotation';
 import IconPrint from '../../../icons/general/IconPrint';
-import IconDownload from '../../../icons/general/IconDownloadSolid';
+import Logo from '../../common/header/Logo';
 import messages from '../../common/messages';
-import { nines } from '../../../styles/variables';
 import PlainButton from '../../../components/plain-button/PlainButton';
+import { bdlGray50 } from '../../../styles/variables';
 
-import './Header.scss';
+import './PreviewHeader.scss';
 
 type Props = {
     canAnnotate: boolean,
     canDownload: boolean,
     contentOpenWithProps?: ContentOpenWithProps,
     file?: BoxItem,
+    logoUrl?: string,
     onClose?: Function,
     onDownload: Function,
     onPrint: Function,
@@ -43,6 +45,7 @@ const PreviewHeader = ({
     contentOpenWithProps = {},
     file,
     intl,
+    logoUrl,
     onClose,
     onDownload,
     onPrint,
@@ -64,78 +67,92 @@ const PreviewHeader = ({
     const drawMsg = intl.formatMessage(messages.drawAnnotation);
     const pointMsg = intl.formatMessage(messages.pointAnnotation);
 
-    const className = classNames('bcpr-header', {
-        'bcpr-header--basic': !isPreviewingCurrentVersion,
-    });
-
     return (
-        <div className={className}>
-            <div className="bp-header bp-base-header">
-                <FileInfo file={file} version={selectedVersion} />
-                <div className="bcpr-btns">
-                    {shouldRenderOpenWith && isPreviewingCurrentVersion && (
-                        <LoadableContentOpenWith
-                            className="bcpr-bcow-btn"
-                            fileId={fileId}
-                            token={token}
-                            {...contentOpenWithProps}
-                        />
+        <header
+            className={classNames('bcpr-PreviewHeader', {
+                'bcpr-PreviewHeader--basic': !isPreviewingCurrentVersion,
+            })}
+        >
+            {/*
+                bp-header and bp-base-header are used by box-annotations,
+                and must be put one level under bcpr-PreviewHeader
+            */}
+            <div className="bcpr-PreviewHeader-content bp-header bp-base-header">
+                {logoUrl ? <Logo url={logoUrl} /> : <FileInfo file={file} version={selectedVersion} />}
+
+                <div className="bcpr-PreviewHeader-controls">
+                    {isPreviewingCurrentVersion && (
+                        <>
+                            {shouldRenderOpenWith && (
+                                <LoadableContentOpenWith
+                                    className="bcpr-bcow-btn"
+                                    fileId={fileId}
+                                    token={token}
+                                    {...contentOpenWithProps}
+                                />
+                            )}
+                            {canAnnotate && (
+                                <>
+                                    <PlainButton
+                                        aria-label={drawMsg}
+                                        className="bcpr-PreviewHeader-button bp-btn-annotate-draw bp-is-hidden"
+                                        title={drawMsg}
+                                        type="button"
+                                    >
+                                        <IconDrawAnnotationMode color={bdlGray50} height={18} width={18} />
+                                    </PlainButton>
+                                    <PlainButton
+                                        aria-label={pointMsg}
+                                        className="bcpr-PreviewHeader-button bp-btn-annotate-point bp-is-hidden"
+                                        title={pointMsg}
+                                        type="button"
+                                    >
+                                        <IconPointAnnotation color={bdlGray50} height={18} width={18} />
+                                    </PlainButton>
+                                </>
+                            )}
+                            {canDownload && (
+                                <PlainButton
+                                    aria-label={printMsg}
+                                    className="bcpr-PreviewHeader-button"
+                                    onClick={onPrint}
+                                    title={printMsg}
+                                    type="button"
+                                >
+                                    <IconPrint color={bdlGray50} height={22} width={22} />
+                                </PlainButton>
+                            )}
+                            {canDownload && (
+                                <PlainButton
+                                    aria-label={downloadMsg}
+                                    className="bcpr-PreviewHeader-button"
+                                    onClick={onDownload}
+                                    title={downloadMsg}
+                                    type="button"
+                                >
+                                    <IconDownload color={bdlGray50} height={18} width={18} />
+                                </PlainButton>
+                            )}
+                        </>
                     )}
-                    {canAnnotate && isPreviewingCurrentVersion && (
-                        <React.Fragment>
-                            <PlainButton
-                                aria-label={drawMsg}
-                                className="bcpr-btn bp-btn-annotate-draw bp-is-hidden"
-                                title={drawMsg}
-                                type="button"
-                            >
-                                <IconDrawAnnotationMode color={nines} height={18} width={18} />
-                            </PlainButton>
-                            <PlainButton
-                                aria-label={pointMsg}
-                                className="bcpr-btn bp-btn-annotate-point bp-is-hidden"
-                                title={pointMsg}
-                                type="button"
-                            >
-                                <IconPointAnnotation color={nines} height={18} width={18} />
-                            </PlainButton>
-                        </React.Fragment>
-                    )}
-                    {canDownload && isPreviewingCurrentVersion && (
-                        <PlainButton
-                            aria-label={printMsg}
-                            className="bcpr-btn"
-                            onClick={onPrint}
-                            title={printMsg}
-                            type="button"
-                        >
-                            <IconPrint color={nines} height={22} width={22} />
-                        </PlainButton>
-                    )}
-                    {canDownload && isPreviewingCurrentVersion && (
-                        <PlainButton
-                            aria-label={downloadMsg}
-                            className="bcpr-btn"
-                            onClick={onDownload}
-                            title={downloadMsg}
-                            type="button"
-                        >
-                            <IconDownload color={nines} height={18} width={18} />
-                        </PlainButton>
-                    )}
+
                     {onClose && (
                         <PlainButton
                             aria-label={isPreviewingCurrentVersion && closeMsg}
-                            className="bcpr-btn bcpr-btn-close"
+                            className="bcpr-PreviewHeader-button bcpr-PreviewHeader-button-close"
                             onClick={onClose}
                             type="button"
                         >
-                            {isPreviewingCurrentVersion ? <IconClose color={nines} height={24} width={24} /> : closeMsg}
+                            {isPreviewingCurrentVersion ? (
+                                <IconClose color={bdlGray50} height={24} width={24} />
+                            ) : (
+                                closeMsg
+                            )}
                         </PlainButton>
                     )}
                 </div>
             </div>
-        </div>
+        </header>
     );
 };
 

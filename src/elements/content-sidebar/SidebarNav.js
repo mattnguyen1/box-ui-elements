@@ -13,7 +13,9 @@ import IconChatRound from '../../icons/general/IconChatRound';
 import messages from '../common/messages';
 import { SIDEBAR_NAV_TARGETS } from '../common/interactionTargets';
 import SidebarNavButton from './SidebarNavButton';
+import SidebarToggle from './SidebarToggle';
 import AdditionalTabs from './additional-tabs';
+import SidebarNavTablist from './SidebarNavTablist';
 import {
     SIDEBAR_VIEW_SKILLS,
     SIDEBAR_VIEW_ACTIVITY,
@@ -24,8 +26,9 @@ import './SidebarNav.scss';
 
 type Props = {
     additionalTabs?: Array<AdditionalSidebarTab>,
+    elementId: string,
     fileId: string,
-    hasActivityFeed: boolean,
+    hasActivity: boolean,
     hasAdditionalTabs: boolean,
     hasDetails: boolean,
     hasMetadata: boolean,
@@ -36,8 +39,9 @@ type Props = {
 
 const SidebarNav = ({
     additionalTabs,
+    elementId,
     fileId,
-    hasActivityFeed,
+    hasActivity,
     hasAdditionalTabs,
     hasDetails,
     hasMetadata,
@@ -46,52 +50,60 @@ const SidebarNav = ({
     isOpen,
     onNavigate,
 }: Props) => (
-    <div aria-label={intl.formatMessage(messages.sidebarNavLabel)} role="tablist">
-        {hasActivityFeed && (
-            <SidebarNavButton
-                interactionTarget={SIDEBAR_NAV_TARGETS.ACTIVITY}
-                isOpen={isOpen}
-                sidebarView={SIDEBAR_VIEW_ACTIVITY}
-                onNavigate={onNavigate}
-                tooltip={<FormattedMessage {...messages.sidebarActivityTitle} />}
-            >
-                <IconChatRound />
-            </SidebarNavButton>
-        )}
-        {hasDetails && (
-            <SidebarNavButton
-                interactionTarget={SIDEBAR_NAV_TARGETS.DETAILS}
-                isOpen={isOpen}
-                sidebarView={SIDEBAR_VIEW_DETAILS}
-                onNavigate={onNavigate}
-                tooltip={<FormattedMessage {...messages.sidebarDetailsTitle} />}
-            >
-                <IconDocInfo />
-            </SidebarNavButton>
-        )}
-        {hasSkills && (
-            <SidebarNavButton
-                interactionTarget={SIDEBAR_NAV_TARGETS.SKILLS}
-                isOpen={isOpen}
-                sidebarView={SIDEBAR_VIEW_SKILLS}
-                onNavigate={onNavigate}
-                tooltip={<FormattedMessage {...messages.sidebarSkillsTitle} />}
-            >
-                <IconMagicWand />
-            </SidebarNavButton>
-        )}
-        {hasMetadata && (
-            <SidebarNavButton
-                interactionTarget={SIDEBAR_NAV_TARGETS.METADATA}
-                isOpen={isOpen}
-                sidebarView={SIDEBAR_VIEW_METADATA}
-                onNavigate={onNavigate}
-                tooltip={<FormattedMessage {...messages.sidebarMetadataTitle} />}
-            >
-                <IconMetadataThick />
-            </SidebarNavButton>
-        )}
-        {hasAdditionalTabs && <AdditionalTabs key={fileId} tabs={additionalTabs} />}
+    <div className="bcs-SidebarNav" aria-label={intl.formatMessage(messages.sidebarNavLabel)}>
+        <div className="bcs-SidebarNav-tabs">
+            <SidebarNavTablist elementId={elementId} isOpen={isOpen} onNavigate={onNavigate}>
+                {hasActivity && (
+                    <SidebarNavButton
+                        data-resin-target={SIDEBAR_NAV_TARGETS.ACTIVITY}
+                        data-testid="sidebaractivity"
+                        sidebarView={SIDEBAR_VIEW_ACTIVITY}
+                        tooltip={<FormattedMessage {...messages.sidebarActivityTitle} />}
+                    >
+                        <IconChatRound />
+                    </SidebarNavButton>
+                )}
+                {hasDetails && (
+                    <SidebarNavButton
+                        data-resin-target={SIDEBAR_NAV_TARGETS.DETAILS}
+                        data-testid="sidebardetails"
+                        sidebarView={SIDEBAR_VIEW_DETAILS}
+                        tooltip={<FormattedMessage {...messages.sidebarDetailsTitle} />}
+                    >
+                        <IconDocInfo />
+                    </SidebarNavButton>
+                )}
+                {hasSkills && (
+                    <SidebarNavButton
+                        data-resin-target={SIDEBAR_NAV_TARGETS.SKILLS}
+                        data-testid="sidebarskills"
+                        sidebarView={SIDEBAR_VIEW_SKILLS}
+                        tooltip={<FormattedMessage {...messages.sidebarSkillsTitle} />}
+                    >
+                        <IconMagicWand />
+                    </SidebarNavButton>
+                )}
+                {hasMetadata && (
+                    <SidebarNavButton
+                        data-resin-target={SIDEBAR_NAV_TARGETS.METADATA}
+                        data-testid="sidebarmetadata"
+                        sidebarView={SIDEBAR_VIEW_METADATA}
+                        tooltip={<FormattedMessage {...messages.sidebarMetadataTitle} />}
+                    >
+                        <IconMetadataThick />
+                    </SidebarNavButton>
+                )}
+            </SidebarNavTablist>
+
+            {hasAdditionalTabs && (
+                <div className="bcs-SidebarNav-overflow">
+                    <AdditionalTabs key={fileId} tabs={additionalTabs} />
+                </div>
+            )}
+        </div>
+        <div className="bcs-SidebarNav-footer">
+            <SidebarToggle isOpen={isOpen} />
+        </div>
     </div>
 );
 

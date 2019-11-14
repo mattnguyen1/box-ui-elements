@@ -12,6 +12,7 @@ import {
     ERROR_CODE_FETCH_TASKS,
     API_PAGE_LIMIT,
 } from '../../constants';
+import type { TaskUpdatePayload } from '../../common/types/tasks';
 
 class TasksNew extends TasksBase {
     getUrlForFileTasks(id: string): string {
@@ -57,7 +58,7 @@ class TasksNew extends TasksBase {
         errorCallback: ElementsErrorCallback,
         file: BoxItem,
         successCallback: Function,
-        task: { id: string },
+        task: TaskUpdatePayload,
     }): void {
         this.errorCode = ERROR_CODE_UPDATE_TASK;
 

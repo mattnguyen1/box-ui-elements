@@ -14,8 +14,6 @@ import SearchAPI from './Search';
 import RecentsAPI from './Recents';
 import VersionsAPI from './Versions';
 import CommentsAPI from './Comments';
-import TasksAPI from './tasks/Tasks';
-import TaskAssignmentsAPI from './tasks/TaskAssignments';
 import TasksNewAPI from './tasks/TasksNew';
 import TaskCollaboratorsAPI from './tasks/TaskCollaborators';
 import TaskLinksAPI from './tasks/TaskLinks';
@@ -26,6 +24,7 @@ import FileCollaboratorsAPI from './FileCollaborators';
 import FeedAPI from './Feed';
 import AppIntegrationsAPI from './AppIntegrations';
 import OpenWithAPI from './OpenWith';
+import MetadataQueryAPI from './MetadataQuery';
 import BoxEditAPI from './box-edit';
 import { DEFAULT_HOSTNAME_API, DEFAULT_HOSTNAME_UPLOAD, TYPE_FOLDER, TYPE_FILE, TYPE_WEBLINK } from '../constants';
 
@@ -81,16 +80,6 @@ class APIFactory {
     commentsAPI: CommentsAPI;
 
     /**
-     * @property {TasksAPI}
-     */
-    tasksAPI: TasksAPI;
-
-    /**
-     * @property {TaskAssignmentsAPI}
-     */
-    taskAssignmentsAPI: TaskAssignmentsAPI;
-
-    /**
      * @property {TasksNewAPI}
      */
     tasksNewAPI: TasksNewAPI;
@@ -140,6 +129,11 @@ class APIFactory {
      */
     appIntegrationsAPI: AppIntegrationsAPI;
 
+    /**
+     * @property {MetadataQueryAPI}
+     */
+    metadataQueryAPI: MetadataQueryAPI;
+
     /** @property {BoxEditAPI}
      *
      */
@@ -158,11 +152,13 @@ class APIFactory {
      * @return {API} Api instance
      */
     constructor(options: Options) {
-        this.options = Object.assign({}, options, {
+        this.options = {
+            ...options,
             apiHost: options.apiHost || DEFAULT_HOSTNAME_API,
             uploadHost: options.uploadHost || DEFAULT_HOSTNAME_UPLOAD,
             cache: options.cache || new Cache(),
-        });
+            language: options.language,
+        };
     }
 
     /**
@@ -217,11 +213,6 @@ class APIFactory {
             delete this.fileAccessStatsAPI;
         }
 
-        if (this.tasksAPI) {
-            this.tasksAPI.destroy();
-            delete this.tasksAPI;
-        }
-
         if (this.tasksNewAPI) {
             this.tasksNewAPI.destroy();
             delete this.tasksNewAPI;
@@ -260,6 +251,11 @@ class APIFactory {
         if (this.appIntegrationsAPI) {
             this.appIntegrationsAPI.destroy();
             delete this.appIntegrationsAPI;
+        }
+
+        if (this.metadataQueryAPI) {
+            this.metadataQueryAPI.destroy();
+            delete this.metadataQueryAPI;
         }
 
         if (this.openWithAPI) {
@@ -313,8 +309,10 @@ class APIFactory {
      *
      * @return {FileAPI} FileAPI instance
      */
-    getFileAPI(): FileAPI {
-        this.destroy();
+    getFileAPI(shouldDestroy: boolean = true): FileAPI {
+        if (shouldDestroy) {
+            this.destroy();
+        }
         this.fileAPI = new FileAPI(this.options);
         return this.fileAPI;
     }
@@ -434,36 +432,6 @@ class APIFactory {
      * API for tasks
      *
      * @param {boolean} shouldDestroy - true if the factory should destroy before returning the call
-     * @return {TasksAPI} TasksAPI instance
-     */
-    getTasksAPI(shouldDestroy: boolean): TasksAPI {
-        if (shouldDestroy) {
-            this.destroy();
-        }
-
-        this.tasksAPI = new TasksAPI(this.options);
-        return this.tasksAPI;
-    }
-
-    /**
-     * API for tasks
-     *
-     * @param {boolean} shouldDestroy - true if the factory should destroy before returning the call
-     * @return {TasksAPI} TaskAssignmentsAPI instance
-     */
-    getTaskAssignmentsAPI(shouldDestroy: boolean): TaskAssignmentsAPI {
-        if (shouldDestroy) {
-            this.destroy();
-        }
-
-        this.taskAssignmentsAPI = new TaskAssignmentsAPI(this.options);
-        return this.taskAssignmentsAPI;
-    }
-
-    /**
-     * API for tasks
-     *
-     * @param {boolean} shouldDestroy - true if the factory should destroy before returning the call
      * @return {TasksAPI} TaskAssignmentsAPI instance
      */
     getTasksNewAPI(shouldDestroy: boolean): TasksNewAPI {
@@ -479,7 +447,7 @@ class APIFactory {
      * API for taskCollaborators
      *
      * @param {boolean} shouldDestroy - true if the factory should destroy before returning the call
-     * @return {TasksAPI} TaskCollaboratorsAPI instance
+     * @return {TaskCollaboratorsAPI} TaskCollaboratorsAPI instance
      */
     getTaskCollaboratorsAPI(shouldDestroy: boolean): TaskCollaboratorsAPI {
         if (shouldDestroy) {
@@ -593,6 +561,21 @@ class APIFactory {
 
         this.appIntegrationsAPI = new AppIntegrationsAPI(this.options);
         return this.appIntegrationsAPI;
+    }
+
+    /**
+     * API for Metadata Query
+     *
+     * @param {boolean} shouldDestroy - true if the factory should destroy before returning the call
+     * @return {MetadataQuery} MetadataQuery instance
+     */
+    getMetadataQueryAPI(shouldDestroy: boolean = false): MetadataQueryAPI {
+        if (shouldDestroy) {
+            this.destroy();
+        }
+
+        this.metadataQueryAPI = new MetadataQueryAPI(this.options);
+        return this.metadataQueryAPI;
     }
 
     /**

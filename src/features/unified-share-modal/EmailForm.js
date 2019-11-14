@@ -17,23 +17,25 @@ import InlineNotice from '../../components/inline-notice';
 import PillSelectorDropdown from '../../components/pill-selector-dropdown';
 import commonMessages from '../../common/messages';
 import { emailValidator } from '../../utils/validators';
-import type { inlineNoticeType } from '../../common/box-types';
+import type { InlineNoticeType } from '../../common/types/core';
 import IconGlobe from '../../icons/general/IconGlobe';
 
 import ContactsField from './ContactsField';
 import messages from './messages';
 import type { contactType as Contact, suggestedCollaboratorsType } from './flowTypes';
+import type { SelectOptionProp } from '../../components/select-field/props';
 
 type Props = {
     cancelButtonProps?: Object,
     children?: React.Node,
+    contactLimit?: number,
     contactsFieldAvatars?: React.Node,
     contactsFieldDisabledTooltip: React.Node,
     contactsFieldLabel: React.Node,
     getContacts: (query: string) => Promise<Array<Contact>>,
     inlineNotice: {
         content: React.Node,
-        type: inlineNoticeType,
+        type: InlineNoticeType,
     },
     intl: IntlShape,
     isContactsFieldEnabled: boolean,
@@ -43,9 +45,11 @@ type Props = {
     onContactAdd?: Function,
     onContactInput?: Function,
     onContactRemove?: Function,
+    onPillCreate?: (pills: Array<SelectOptionProp | Contact>) => void,
     onRequestClose: Function,
     onSubmit: Function,
     openInviteCollaboratorsSection?: Function,
+    recommendedSharingTooltipCalloutName?: ?string,
     selectedContacts: Array<Contact>,
     sendButtonProps?: Object,
     showEnterEmailsCallout: boolean,
@@ -79,9 +83,12 @@ class EmailForm extends React.Component<Props, State> {
     } = React.createRef();
 
     handleContactAdd = (contacts: Array<Contact>) => {
-        const { onContactAdd, updateSelectedContacts } = this.props;
+        const { selectedContacts, onContactAdd, updateSelectedContacts } = this.props;
 
-        updateSelectedContacts([...this.props.selectedContacts, ...contacts]);
+        const updatedContacts = [...selectedContacts, ...contacts];
+        updateSelectedContacts(updatedContacts);
+
+        this.validateContacts(updatedContacts);
 
         if (onContactAdd) {
             onContactAdd(contacts);
@@ -94,16 +101,33 @@ class EmailForm extends React.Component<Props, State> {
         const removed = selectedContacts.splice(index, 1);
         updateSelectedContacts(selectedContacts);
 
+        this.validateContacts(selectedContacts);
+
         if (onContactRemove) {
             onContactRemove(removed);
         }
     };
 
+    validateContacts = (selectedContacts: Array<Contact>) => {
+        const { contactLimit, intl } = this.props;
+
+        let contactsFieldError = '';
+        if (contactLimit !== undefined && selectedContacts.length > contactLimit) {
+            contactsFieldError = intl.formatMessage(messages.contactsExceedLimitError, {
+                maxContacts: contactLimit,
+            });
+        } else if (selectedContacts.length === 0) {
+            contactsFieldError = intl.formatMessage(messages.enterAtLeastOneEmailError);
+        }
+
+        this.setState({ contactsFieldError });
+
+        return contactsFieldError;
+    };
+
     handleContactInput = (value: string) => {
         const { onContactInput } = this.props;
 
-        // As user is typing, reset error
-        this.setState({ contactsFieldError: '' });
         if (onContactInput) {
             onContactInput(value);
         }
@@ -140,11 +164,7 @@ class EmailForm extends React.Component<Props, State> {
     handleSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        const {
-            intl: { formatMessage },
-            onSubmit,
-            selectedContacts,
-        } = this.props;
+        const { onSubmit, selectedContacts } = this.props;
         const { message, contactsFieldError } = this.state;
 
         if (contactsFieldError !== '') {
@@ -152,11 +172,8 @@ class EmailForm extends React.Component<Props, State> {
             return;
         }
 
-        if (selectedContacts.length === 0) {
-            // Block submission if no pills are selected
-            this.setState({
-                contactsFieldError: formatMessage(messages.enterAtLeastOneEmailError),
-            });
+        const contactsError = this.validateContacts(selectedContacts);
+        if (contactsError) {
             return;
         }
 
@@ -217,6 +234,8 @@ class EmailForm extends React.Component<Props, State> {
             intl,
             isExpanded,
             messageProps,
+            onPillCreate,
+            recommendedSharingTooltipCalloutName,
             sendButtonProps,
             showEnterEmailsCallout,
             selectedContacts,
@@ -224,16 +243,34 @@ class EmailForm extends React.Component<Props, State> {
             suggestedCollaborators,
         } = this.props;
 
+        const ftuxTooltipProps = {
+            className: 'usm-ftux-tooltip',
+            isShown: showEnterEmailsCallout,
+            position: 'middle-right',
+            showCloseButton: true,
+            text: <FormattedMessage {...messages.enterEmailAddressesCalloutText} />,
+            theme: 'callout',
+        };
+
+        const recommendedSharingTooltipProps = {
+            isShown: !!recommendedSharingTooltipCalloutName,
+            position: 'middle-left',
+            text: (
+                <FormattedMessage
+                    {...messages.recommendedSharingTooltipCalloutText}
+                    values={{ fullName: recommendedSharingTooltipCalloutName }}
+                />
+            ),
+            theme: 'callout',
+        };
+
+        const tooltipPropsToRender = recommendedSharingTooltipCalloutName
+            ? recommendedSharingTooltipProps
+            : ftuxTooltipProps;
+
         const contactsField = (
             <div className="tooltip-target">
-                <Tooltip
-                    className="usm-ftux-tooltip"
-                    isShown={showEnterEmailsCallout}
-                    position="middle-right"
-                    showCloseButton
-                    text={<FormattedMessage {...messages.enterEmailAddressesCalloutText} />}
-                    theme="callout"
-                >
+                <Tooltip {...tooltipPropsToRender}>
                     <ContactsField
                         disabled={!isContactsFieldEnabled}
                         error={contactsFieldError}
@@ -243,6 +280,7 @@ class EmailForm extends React.Component<Props, State> {
                         onContactAdd={this.handleContactAdd}
                         onContactRemove={this.handleContactRemove}
                         onInput={this.handleContactInput}
+                        onPillCreate={onPillCreate}
                         selectedContacts={selectedContacts}
                         suggestedCollaborators={suggestedCollaborators}
                         validateForError={this.validateContactField}
@@ -300,7 +338,7 @@ class EmailForm extends React.Component<Props, State> {
                             <FormattedMessage {...commonMessages.cancel} />
                         </Button>
                         <PrimaryButton
-                            isDisabled={submitting || selectedContacts.length === 0}
+                            isDisabled={submitting}
                             isLoading={submitting}
                             type="submit"
                             {...sendButtonProps}

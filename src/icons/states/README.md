@@ -46,7 +46,7 @@ const icons = [
     },
     {
         name: 'LocationErrorState',
-        content: () => {
+        component: () => {
             const LocationErrorState = require('./LocationErrorState').default;
             return (
                 <div>
@@ -66,7 +66,7 @@ const icons = [
     },
     {
         name: 'NoNotificationState',
-        content: () => {
+        component: () => {
             const NoNotificationState = require('./NoNotificationState').default;
             return (
                 <div>
@@ -82,7 +82,7 @@ const icons = [
     },
     {
         name: 'NotificationErrorState',
-        content: () => {
+        component: () => {
             const NotificationErrorState = require('./NotificationErrorState').default;
             return (
                 <div>
@@ -97,8 +97,20 @@ const icons = [
         component: require('./RecentsEmptyState').default,
     },
     {
+        name: 'SandboxesEmptyState',
+        component: require('./SandboxesEmptyState').default,
+    },
+    {
+        name: 'SandboxesInterstitialState',
+        component: require('./SandboxesInterstitialState').default,
+    },
+    {
         name: 'SearchEmptyState',
         component: require('./SearchEmptyState').default,
+    },
+    {
+        name: 'SecurityBlockedState',
+        component: require('./SecurityBlockedState').default,
     },
     {
         name: 'SelectedItemsEmptyState',
@@ -115,6 +127,10 @@ const icons = [
     {
         name: 'SyncEmptyState',
         component: require('./SyncEmptyState').default,
+    },
+    {
+        name: 'TaskEmptyState',
+        component: require('./TaskEmptyState').default,
     },
     {
         name: 'TrashEmptyState',
@@ -139,6 +155,10 @@ const icons = [
     {
         name: 'UploadSuccessState',
         component: require('./UploadSuccessState').default,
+    },
+    {
+        name: 'UsersEmptyState',
+        component: require('./UsersEmptyState').default,
     },
 ];
 

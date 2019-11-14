@@ -1,5 +1,6 @@
 // @flow
 import * as React from 'react';
+import isEqual from 'lodash/isEqual';
 
 import CustomNewField from './CustomInstanceNewField';
 import CustomField from './fields/CustomField';
@@ -24,19 +25,22 @@ class CustomInstance extends React.PureComponent<Props, State> {
         data: {},
     };
 
+    static getDerivedStateFromProps({ data }: Props, { properties }: State): any {
+        if (!isEqual(data, properties)) {
+            return {
+                properties: { ...data },
+            };
+        }
+
+        return null;
+    }
+
     constructor(props: Props) {
         super(props);
         this.state = {
             isAddFieldVisible: false,
             properties: { ...props.data },
         };
-    }
-
-    componentWillReceiveProps(nextProps: Props) {
-        this.setState({
-            isAddFieldVisible: false,
-            properties: { ...nextProps.data },
-        });
     }
 
     /**
@@ -85,7 +89,7 @@ class CustomInstance extends React.PureComponent<Props, State> {
         const canAddFields = canEdit && (isAddFieldVisible || fields.length === 0);
 
         return (
-            <React.Fragment>
+            <>
                 {fields.map((key, index) => (
                     <CustomField
                         key={key}
@@ -107,7 +111,7 @@ class CustomInstance extends React.PureComponent<Props, State> {
                         properties={this.props.data}
                     />
                 )}
-            </React.Fragment>
+            </>
         );
     }
 }

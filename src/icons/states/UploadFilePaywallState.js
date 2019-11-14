@@ -2,18 +2,11 @@
 import * as React from 'react';
 
 import AccessibleSVG from '../accessible-svg';
-import { BOX_BLUE } from '../../common/variables';
+import { bdlBoxBlue } from '../../styles/variables';
 
-type Props = {
-    className?: string,
-    color?: string,
-    height?: number,
-    /** A text-only string describing the icon if it's not purely decorative for accessibility */
-    title?: string | React.Element<any>,
-    width?: number,
-};
+import type { Icon } from '../flowTypes';
 
-const UploadFilePaywallState = ({ className = '', color = BOX_BLUE, height = 129, title, width = 133 }: Props) => (
+const UploadFilePaywallState = ({ className = '', color = bdlBoxBlue, height = 129, title, width = 133 }: Icon) => (
     <AccessibleSVG
         className={`upload-file-paywall-state ${className}`}
         height={height}

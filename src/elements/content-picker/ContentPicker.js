@@ -161,31 +161,33 @@ class ContentPicker extends Component<Props, State> {
         super(props);
 
         const {
-            token,
-            sharedLink,
-            sharedLinkPassword,
             apiHost,
-            uploadHost,
+            clientName,
             initialPage,
             initialPageSize,
-            sortBy,
-            sortDirection,
-            clientName,
+            language,
             requestInterceptor,
             responseInterceptor,
             rootFolderId,
+            sharedLink,
+            sharedLinkPassword,
+            sortBy,
+            sortDirection,
+            token,
+            uploadHost,
         } = props;
 
         this.api = new API({
-            token,
-            sharedLink,
-            sharedLinkPassword,
             apiHost,
-            uploadHost,
             clientName,
+            id: `${TYPED_ID_FOLDER_PREFIX}${rootFolderId}`,
+            language,
             requestInterceptor,
             responseInterceptor,
-            id: `${TYPED_ID_FOLDER_PREFIX}${rootFolderId}`,
+            sharedLink,
+            sharedLinkPassword,
+            token,
+            uploadHost,
         });
 
         this.id = uniqueid('bcp_');
@@ -256,11 +258,15 @@ class ContentPicker extends Component<Props, State> {
      * @inheritdoc
      * @return {void}
      */
-    componentWillReceiveProps(nextProps: Props) {
-        const { currentFolderId }: Props = nextProps;
+    componentDidUpdate({ currentFolderId: prevFolderId }: Props, prevState: State): void {
+        const { currentFolderId }: Props = this.props;
         const {
             currentCollection: { id },
-        }: State = this.state;
+        }: State = prevState;
+
+        if (prevFolderId === currentFolderId) {
+            return;
+        }
 
         if (typeof currentFolderId === 'string' && id !== currentFolderId) {
             this.fetchFolder(currentFolderId);
@@ -282,7 +288,7 @@ class ContentPicker extends Component<Props, State> {
         const { selected }: State = this.state;
         const { onChoose }: Props = this.props;
         const results: BoxItem[] = Object.keys(selected).map(key => {
-            const clone: BoxItem = Object.assign({}, selected[key]);
+            const clone: BoxItem = { ...selected[key] };
             delete clone.selected;
             return clone;
         });
@@ -854,6 +860,9 @@ class ContentPicker extends Component<Props, State> {
                     .getFile(id, this.handleSharedLinkSuccess, noop, { fields: FILE_SHARED_LINK_FIELDS_TO_FETCH });
                 break;
             case TYPE_WEBLINK:
+                this.api
+                    .getWebLinkAPI()
+                    .getWeblink(id, this.handleSharedLinkSuccess, noop, { fields: FILE_SHARED_LINK_FIELDS_TO_FETCH });
                 break;
             default:
                 throw new Error('Unknown Type');
@@ -1144,7 +1153,8 @@ class ContentPicker extends Component<Props, State> {
         const { id, offset, permissions, totalCount }: Collection = currentCollection;
         const { can_upload }: BoxItemPermission = permissions || {};
         const selectedCount: number = Object.keys(selected).length;
-        const hasHitSelectionLimit: boolean = selectedCount === maxSelectable && maxSelectable !== 1;
+        const isSingleSelect = maxSelectable === 1;
+        const hasHitSelectionLimit: boolean = selectedCount === maxSelectable && !isSingleSelect;
         const allowUpload: boolean = canUpload && !!can_upload;
         const allowCreate: boolean = canCreateNewFolder && !!can_upload;
         const styleClassName = classNames('be bcp', className);
@@ -1186,6 +1196,7 @@ class ContentPicker extends Component<Props, State> {
                             extensionsWhitelist={extensions}
                             hasHitSelectionLimit={hasHitSelectionLimit}
                             currentCollection={currentCollection}
+                            isSingleSelect={isSingleSelect}
                             tableRef={this.tableRef}
                             onItemSelect={this.select}
                             onItemClick={this.onItemClick}
@@ -1195,6 +1206,7 @@ class ContentPicker extends Component<Props, State> {
                         <Footer
                             selectedCount={selectedCount}
                             hasHitSelectionLimit={hasHitSelectionLimit}
+                            isSingleSelect={isSingleSelect}
                             onSelectedClick={this.showSelected}
                             onChoose={this.choose}
                             onCancel={this.cancel}

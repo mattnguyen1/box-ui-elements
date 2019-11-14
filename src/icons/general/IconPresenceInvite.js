@@ -1,20 +1,13 @@
 // @flow
 import * as React from 'react';
 
-import { BOX_BLUE } from '../../common/variables';
+import { bdlBoxBlue } from '../../styles/variables';
 
 import AccessibleSVG from '../accessible-svg';
 
-type Props = {
-    className?: string,
-    color?: string,
-    height?: number,
-    /** A text-only string describing the icon if it's not purely decorative for accessibility */
-    title?: string | React.Element<any>,
-    width?: number,
-};
+import type { Icon } from '../flowTypes';
 
-const IconPresenceInvite = ({ className = '', color = BOX_BLUE, height = 28, title, width = 28 }: Props) => (
+const IconPresenceInvite = ({ className = '', color = bdlBoxBlue, height = 28, title, width = 28 }: Icon) => (
     <AccessibleSVG
         className={`icon-presence-invite ${className}`}
         height={height}

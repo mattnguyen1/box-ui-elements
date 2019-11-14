@@ -7,7 +7,7 @@
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import classNames from 'classnames';
-import { nines } from '../../../../styles/variables';
+import { bdlGray50 } from '../../../../styles/variables';
 import PlainButton from '../../../../components/plain-button/PlainButton';
 import IconEdit from '../../../../icons/general/IconEdit';
 import IconCopy from '../../../../icons/general/IconCopy';
@@ -55,7 +55,11 @@ class Transcript extends React.PureComponent<Props, State> {
      * @private
      * @return {void}
      */
-    componentWillReceiveProps(): void {
+    componentDidUpdate(prevProps: Props): void {
+        if (prevProps === this.props) {
+            return;
+        }
+
         const wasEditing = typeof this.state.isEditingIndex === 'number';
         this.setState({
             isEditingIndex: wasEditing ? -1 : undefined,
@@ -300,7 +304,7 @@ class Transcript extends React.PureComponent<Props, State> {
                                 onClick={this.copyTranscript}
                                 type="button"
                             >
-                                <IconCopy color={nines} />
+                                <IconCopy color={bdlGray50} />
                             </PlainButton>
                         </Tooltip>
                         {hasManyEntries && (
@@ -311,7 +315,11 @@ class Transcript extends React.PureComponent<Props, State> {
                                     onClick={this.toggleExpandCollapse}
                                     type="button"
                                 >
-                                    {isCollapsed ? <IconExpand color={nines} /> : <IconCollapse color={nines} />}
+                                    {isCollapsed ? (
+                                        <IconExpand color={bdlGray50} />
+                                    ) : (
+                                        <IconCollapse color={bdlGray50} />
+                                    )}
                                 </PlainButton>
                             </Tooltip>
                         )}

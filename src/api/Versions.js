@@ -11,14 +11,12 @@ import {
     DEFAULT_FETCH_END,
     DEFAULT_FETCH_START,
     ERROR_CODE_DELETE_VERSION,
+    ERROR_CODE_FETCH_VERSION,
     ERROR_CODE_FETCH_VERSIONS,
     ERROR_CODE_PROMOTE_VERSION,
     ERROR_CODE_RESTORE_VERSION,
     PERMISSION_CAN_DELETE,
     PERMISSION_CAN_UPLOAD,
-    VERSION_DELETE_ACTION,
-    VERSION_RESTORE_ACTION,
-    VERSION_UPLOAD_ACTION,
 } from '../constants';
 
 class Versions extends OffsetBasedAPI {
@@ -52,30 +50,7 @@ class Versions extends OffsetBasedAPI {
     }
 
     /**
-     * Formats version data for use in components.
-     *
-     * @param {BoxItemVersion} version - An individual version entry from the API
-     * @return {BoxItemVersion} A version
-     */
-    format = (version: BoxItemVersion) => {
-        let action = VERSION_UPLOAD_ACTION;
-
-        if (version.trashed_at) {
-            action = VERSION_DELETE_ACTION;
-        }
-
-        if (version.version_restored) {
-            action = VERSION_RESTORE_ACTION;
-        }
-
-        return {
-            ...version,
-            action,
-        };
-    };
-
-    /**
-     * Formats the versions api response to usable data
+     * Returns the versions api response data
      * @param {Object} data the api response data
      */
     successHandler = (data: FileVersions): void => {
@@ -83,73 +58,8 @@ class Versions extends OffsetBasedAPI {
             return;
         }
 
-        // There is no response data when deleting/promoting a version
-        if (!data) {
-            this.successCallback();
-            return;
-        }
-
-        // We don't have entries when creating/updating a version
-        if (!data.entries) {
-            this.successCallback(this.format(data));
-            return;
-        }
-
-        this.successCallback({ ...data, entries: data.entries.map(this.format) });
+        this.successCallback(data);
     };
-
-    /**
-     * Helper to add the current version from the file object, which may be a restore
-     *
-     * @param {FileVersions} versions - API returned file versions for this file
-     * @param {BoxItem} file - The parent file object
-     * @return {FileVersions} modified versions array including the current/restored version
-     */
-    addCurrentVersion(versions: ?FileVersions, file: BoxItem): ?FileVersions {
-        const { file_version } = file;
-
-        if (!file_version || !versions) {
-            return versions;
-        }
-
-        const { entries, total_count } = versions;
-        const {
-            extension,
-            is_download_available,
-            modified_at,
-            modified_by,
-            name,
-            permissions,
-            size,
-            version_number,
-        } = file;
-        const currentVersion: BoxItemVersion = {
-            ...file_version,
-            action: VERSION_UPLOAD_ACTION,
-            created_at: modified_at,
-            extension,
-            is_download_available,
-            modified_at,
-            modified_by,
-            permissions,
-            name,
-            size,
-            version_number,
-        };
-        const restoredFromId = getProp(file, 'restored_from.id');
-        const restoredVersion =
-            restoredFromId && entries.find((version: BoxItemVersion) => version.id === restoredFromId);
-
-        if (restoredVersion) {
-            currentVersion.action = VERSION_RESTORE_ACTION;
-            currentVersion.version_restored = restoredVersion.version_number;
-        }
-
-        return {
-            entries: [...entries, currentVersion],
-            total_count: total_count + 1,
-        };
-    }
 
     /**
      * Helper to add associated permissions from the file to the version objects
@@ -243,6 +153,63 @@ class Versions extends OffsetBasedAPI {
     }
 
     /**
+     * API for fetching a certain version for a file
+     *
+     * @param {string} fileId - a box file id
+     * @param {string} fileVersionId - a box file version id
+     * @param {Function} successCallback - the success callback
+     * @param {Function} errorCallback - the error callback
+     * @returns {void}
+     */
+    getVersion(
+        fileId: string,
+        fileVersionId: string,
+        successCallback: BoxItemVersion => void,
+        errorCallback: ElementsErrorCallback,
+    ): void {
+        this.errorCode = ERROR_CODE_FETCH_VERSION;
+
+        this.get({
+            id: fileId,
+            successCallback,
+            errorCallback,
+            url: this.getVersionUrl(fileId, fileVersionId),
+            requestData: {
+                params: {
+                    fields: FILE_VERSIONS_FIELDS_TO_FETCH.toString(),
+                },
+            },
+        });
+    }
+
+    /**
+     * Decorates the current version and adds it to an existing FileVersions object
+     *
+     * @param {BoxItemVersion} currentVersion - a box version
+     * @param {FileVersions} versions - versions response
+     * @param {BoxItem} file - a box file
+     * @returns {FileVersions} - a FileVersions object containing the decorated current version
+     */
+    addCurrentVersion(currentVersion: ?BoxItemVersion, versions: ?FileVersions, file: BoxItem): FileVersions {
+        if (!currentVersion) {
+            return versions || { entries: [], total_count: 0 };
+        }
+
+        if (!versions) {
+            return { entries: [currentVersion], total_count: 1 };
+        }
+
+        const promotedFromId = getProp(file, 'restored_from.id');
+        const promotedVersion = versions.entries.find(version => version.id === promotedFromId);
+
+        if (promotedVersion) {
+            currentVersion.version_promoted = promotedVersion.version_number;
+        }
+
+        return { entries: [...versions.entries, currentVersion], total_count: versions.total_count + 1 };
+    }
+
+    /**
      * API for promoting a version of a file to current
      *
      * @param {Object} options - the request options
@@ -333,25 +300,6 @@ class Versions extends OffsetBasedAPI {
             successCallback,
             errorCallback,
         });
-    }
-
-    /**
-     * Helper to sort versions by their created date
-     *
-     * @param {FileVersions} versions - API returned file versions for this file
-     * @return {FileVersions} sorted versions array
-     */
-    sortVersions(versions: ?FileVersions): ?FileVersions {
-        if (!versions) {
-            return versions;
-        }
-
-        const { entries, total_count } = versions;
-
-        return {
-            entries: [...entries].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
-            total_count,
-        };
     }
 }
 

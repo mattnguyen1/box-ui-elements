@@ -1,5 +1,5 @@
 // @flow
-import type { itemType } from '../../common/box-types';
+import type { ItemType } from '../../common/types/core';
 import * as constants from './constants';
 
 // DRY: Invert the constants so that we can construct the appropriate enum types
@@ -29,6 +29,12 @@ export type allowedAccessLevelsType = {
     peopleWithTheLink?: boolean,
 };
 
+export type accessLevelsDisabledReasonType = {
+    peopleInThisItem?: 'access_policy' | null,
+    peopleInYourCompany?: 'access_policy' | null,
+    peopleWithTheLink?: 'access_policy' | null,
+};
+
 export type contactType = {
     email?: string,
     id: number | string,
@@ -47,6 +53,11 @@ export type inviteePermissionType = {
 };
 
 export type item = {
+    bannerPolicy?: {
+        body: string,
+        title: string,
+    },
+    classification?: string,
     description: string,
     extension: string,
     grantedPermissions: {
@@ -55,7 +66,7 @@ export type item = {
     hideCollaborators: boolean,
     id: number,
     name: string,
-    type: itemType,
+    type: ItemType,
     typedID: string,
 };
 
@@ -118,6 +129,7 @@ export type trackingPropsType = {
 // this type is a strict subset of the SharedLinkRecord data returned from the server
 export type sharedLinkType = {
     accessLevel: accessLevelType,
+    accessLevelsDisabledReason?: accessLevelsDisabledReasonType,
     allowedAccessLevels: allowedAccessLevelsType,
     canChangeAccessLevel: boolean,
     enterpriseName: string,

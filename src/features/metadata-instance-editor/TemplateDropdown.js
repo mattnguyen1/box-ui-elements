@@ -1,6 +1,7 @@
 // @flow
 import * as React from 'react';
 import classNames from 'classnames';
+import isEqual from 'lodash/isEqual';
 import { FormattedMessage, injectIntl } from 'react-intl';
 
 import DatalistItem from '../../components/datalist-item';
@@ -24,6 +25,7 @@ type Props = {
     intl: any,
     isDropdownBusy?: boolean,
     onAdd: (template: MetadataTemplate) => void,
+    onDropdownToggle?: (isDropdownOpen: boolean) => void,
     templates: Array<MetadataTemplate>,
     title?: React.Node,
     usedTemplates: Array<MetadataTemplate>,
@@ -66,13 +68,17 @@ class TemplateDropdown extends React.PureComponent<Props, State> {
     /**
      * Updates the state
      *
-     * @param {Object} nextProps - next props
+     * @param {Object} prevProps - next props
      * @return {void}
      */
-    componentWillReceiveProps(nextProps: Props) {
-        this.setState({
-            templates: getAvailableTemplates(nextProps.templates, nextProps.usedTemplates),
-        });
+    componentDidUpdate({ templates: prevTemplates, usedTemplates: prevUsedTemplates }: Props) {
+        const { templates, usedTemplates } = this.props;
+
+        if (!isEqual(prevTemplates, templates) || !isEqual(prevUsedTemplates, usedTemplates)) {
+            this.setState({
+                templates: getAvailableTemplates(templates, usedTemplates),
+            });
+        }
     }
 
     getDropdown = () => {
@@ -133,7 +139,7 @@ class TemplateDropdown extends React.PureComponent<Props, State> {
         });
 
         return (
-            <React.Fragment>
+            <>
                 <SelectorDropdown
                     className="metadata-instance-editor-template-dropdown-menu"
                     title={title}
@@ -147,7 +153,7 @@ class TemplateDropdown extends React.PureComponent<Props, State> {
                     {indicatorOrMessage ? null : renderedTemplates}
                 </SelectorDropdown>
                 {indicatorOrMessage}
-            </React.Fragment>
+            </>
         );
     };
 
@@ -208,7 +214,11 @@ class TemplateDropdown extends React.PureComponent<Props, State> {
     };
 
     onOpen = () => {
-        const { templates, usedTemplates } = this.props;
+        const { onDropdownToggle, templates, usedTemplates } = this.props;
+
+        if (onDropdownToggle) {
+            onDropdownToggle(true);
+        }
 
         this.setState({
             isDropdownOpen: true,
@@ -218,6 +228,12 @@ class TemplateDropdown extends React.PureComponent<Props, State> {
     };
 
     onClose = () => {
+        const { onDropdownToggle } = this.props;
+
+        if (onDropdownToggle) {
+            onDropdownToggle(false);
+        }
+
         this.setState({ isDropdownOpen: false });
     };
 

@@ -7,8 +7,12 @@
 import React from 'react';
 import EmptyState from '../common/empty-state';
 import ProgressBar from '../common/progress-bar';
+import ItemGrid from './ItemGrid';
 import ItemList from './ItemList';
-import { VIEW_ERROR, VIEW_SELECTED } from '../../constants';
+import MetadataBasedItemList from '../../features/metadata-based-view';
+import type { ViewMode } from '../common/flowTypes';
+import type { MetadataColumnsToShow } from '../../common/types/metadataQueries';
+import { VIEW_ERROR, VIEW_METADATA, VIEW_MODE_LIST, VIEW_MODE_GRID, VIEW_SELECTED } from '../../constants';
 import './Content.scss';
 
 /**
@@ -18,9 +22,9 @@ import './Content.scss';
  * @param {Object} currentCollection the current collection
  * @return {boolean} empty or not
  */
-function isEmpty(view: View, currentCollection: Collection): boolean {
+function isEmpty(view: View, currentCollection: Collection, metadataColumnsToShow: MetadataColumnsToShow): boolean {
     const { items = [] }: Collection = currentCollection;
-    return view === VIEW_ERROR || items.length === 0;
+    return view === VIEW_ERROR || items.length === 0 || (view === VIEW_METADATA && metadataColumnsToShow.length === 0);
 }
 
 type Props = {
@@ -31,9 +35,11 @@ type Props = {
     canShare: boolean,
     currentCollection: Collection,
     focusedRow: number,
+    gridColumnCount?: number,
     isMedium: boolean,
     isSmall: boolean,
     isTouch: boolean,
+    metadataColumnsToShow?: MetadataColumnsToShow,
     onItemClick: Function,
     onItemDelete: Function,
     onItemDownload: Function,
@@ -46,65 +52,61 @@ type Props = {
     rootId: string,
     tableRef: Function,
     view: View,
+    viewMode?: ViewMode,
 };
 
 const Content = ({
-    view,
-    isSmall,
-    isMedium,
-    isTouch,
-    rootId,
-    rootElement,
     currentCollection,
-    tableRef,
     focusedRow,
-    canDownload,
-    canDelete,
-    canRename,
-    canShare,
-    canPreview,
-    onItemClick,
-    onItemSelect,
-    onItemDelete,
-    onItemDownload,
-    onItemRename,
-    onItemShare,
-    onItemPreview,
+    gridColumnCount = 1,
+    isMedium,
     onSortChange,
-}: Props) => (
-    <div className="bce-content">
-        {view === VIEW_ERROR || view === VIEW_SELECTED ? null : (
-            <ProgressBar percent={currentCollection.percentLoaded} />
-        )}
-        {isEmpty(view, currentCollection) ? (
-            <EmptyState view={view} isLoading={currentCollection.percentLoaded !== 100} />
-        ) : (
-            <ItemList
-                view={view}
-                isSmall={isSmall}
-                isMedium={isMedium}
-                isTouch={isTouch}
-                rootId={rootId}
-                rootElement={rootElement}
-                focusedRow={focusedRow}
-                currentCollection={currentCollection}
-                tableRef={tableRef}
-                canShare={canShare}
-                canPreview={canPreview}
-                canDelete={canDelete}
-                canRename={canRename}
-                canDownload={canDownload}
-                onItemClick={onItemClick}
-                onItemSelect={onItemSelect}
-                onItemDelete={onItemDelete}
-                onItemDownload={onItemDownload}
-                onItemRename={onItemRename}
-                onItemShare={onItemShare}
-                onItemPreview={onItemPreview}
-                onSortChange={onSortChange}
-            />
-        )}
-    </div>
-);
+    tableRef,
+    view,
+    viewMode = VIEW_MODE_LIST,
+    metadataColumnsToShow = [],
+    ...rest
+}: Props) => {
+    const isViewEmpty = isEmpty(view, currentCollection, metadataColumnsToShow);
+    const isMetadataBasedView = view === VIEW_METADATA;
+    const isListView = !isMetadataBasedView && viewMode === VIEW_MODE_LIST; // Folder view or Recents view
+    const isGridView = !isMetadataBasedView && viewMode === VIEW_MODE_GRID; // Folder view or Recents view
+
+    return (
+        <div className="bce-content">
+            {view === VIEW_ERROR || view === VIEW_SELECTED ? null : (
+                <ProgressBar percent={currentCollection.percentLoaded} />
+            )}
+
+            {isViewEmpty && <EmptyState view={view} isLoading={currentCollection.percentLoaded !== 100} />}
+            {!isViewEmpty && isMetadataBasedView && (
+                <MetadataBasedItemList
+                    currentCollection={currentCollection}
+                    metadataColumnsToShow={metadataColumnsToShow}
+                    {...rest}
+                />
+            )}
+            {!isViewEmpty && isListView && (
+                <ItemList
+                    currentCollection={currentCollection}
+                    onSortChange={onSortChange}
+                    focusedRow={focusedRow}
+                    isMedium={isMedium}
+                    tableRef={tableRef}
+                    view={view}
+                    {...rest}
+                />
+            )}
+            {!isViewEmpty && isGridView && (
+                <ItemGrid
+                    currentCollection={currentCollection}
+                    gridColumnCount={gridColumnCount}
+                    view={view}
+                    {...rest}
+                />
+            )}
+        </div>
+    );
+};
 
 export default Content;

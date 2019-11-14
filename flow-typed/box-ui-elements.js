@@ -4,6 +4,8 @@
  * @author Box
  */
 /* eslint-disable no-use-before-define, no-unused-vars */
+// NOTE: all of these imports resolve to `any`
+// see https://github.com/facebook/flow/issues/7574
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import type { MessageDescriptor, InjectIntlProvidedProps } from 'react-intl';
@@ -18,6 +20,7 @@ import type { ContentSidebarProps } from '../src/elements/content-sidebar';
 import type { ContentOpenWithProps } from '../src/elements/content-open-with';
 import type { ContentPreviewProps } from '../src/elements/content-preview';
 import type { FeatureConfig } from '../src/elements/common/feature-checking';
+import type { TaskNew } from '../src/common/types/tasks';
 import {
     ACCESS_OPEN,
     ACCESS_COLLAB,
@@ -38,6 +41,7 @@ import {
     TYPE_WEBLINK,
     STATUS_PENDING,
     STATUS_IN_PROGRESS,
+    STATUS_STAGED,
     STATUS_COMPLETE,
     STATUS_ERROR,
     DELIMITER_SLASH,
@@ -80,6 +84,9 @@ import {
     METRIC_TYPE_PREVIEW,
     METRIC_TYPE_ELEMENTS_LOAD_METRIC,
     METRIC_TYPE_ELEMENTS_PERFORMANCE_METRIC,
+    VERSION_RETENTION_DELETE_ACTION,
+    VERSION_RETENTION_REMOVE_ACTION,
+    VERSION_RETENTION_INDEFINITE,
 } from '../src/constants';
 
 import {
@@ -124,7 +131,12 @@ type View =
 type SortBy = typeof FIELD_DATE | typeof FIELD_NAME | typeof FIELD_RELEVANCE | typeof FIELD_SIZE;
 type SortDirection = typeof SORT_ASC | typeof SORT_DESC;
 type ItemType = typeof TYPE_FILE | typeof TYPE_FOLDER | typeof TYPE_WEBLINK;
-type UploadStatus = typeof STATUS_PENDING | typeof STATUS_IN_PROGRESS | typeof STATUS_COMPLETE | typeof STATUS_ERROR;
+type UploadStatus =
+    | typeof STATUS_PENDING
+    | typeof STATUS_IN_PROGRESS
+    | typeof STATUS_STAGED
+    | typeof STATUS_COMPLETE
+    | typeof STATUS_ERROR;
 type Delimiter = typeof DELIMITER_SLASH | typeof DELIMITER_CARET;
 type Size = typeof SIZE_SMALL | typeof SIZE_LARGE | typeof SIZE_MEDIUM;
 type TaskAssignmentStatus =
@@ -155,11 +167,37 @@ type BoxItemPermission = {
     can_upload?: boolean,
 };
 
+type BoxCommentPermission = {
+    can_delete?: boolean,
+    can_edit?: boolean,
+};
+
+type BoxTaskPermission = {
+    can_delete?: boolean,
+    can_update?: boolean,
+};
+
 type BoxItemVersionPermission = {
     can_delete?: boolean,
     can_download?: boolean,
     can_preview?: boolean,
     can_upload?: boolean,
+};
+
+type BoxItemVersionRetention = {
+    applied_at: string,
+    disposition_at: string,
+    id: string,
+    type: 'file_version_retention',
+    winning_retention_policy: BoxItemVersionRetentionPolicy,
+};
+
+type BoxItemVersionRetentionPolicy = {
+    disposition_action: typeof VERSION_RETENTION_DELETE_ACTION | typeof VERSION_RETENTION_REMOVE_ACTION,
+    id: string,
+    policy_name: string,
+    retention_length: typeof VERSION_RETENTION_INDEFINITE | string, // length in days
+    type: 'retention_policy',
 };
 
 type User = {
@@ -256,7 +294,20 @@ type MetadataSkillsTemplate = {
 };
 
 type MetadataType = {
+    enterprise?: MetadataQueryInstanceTemplate,
     global?: MetadataSkillsTemplate,
+};
+
+type MetadataQueryInstanceTypeField = {
+    name: string,
+    options?: MetadataTemplateFieldOption,
+    type: string,
+    value: string,
+};
+
+type MetadataQueryInstanceTemplate = {
+    fields: Array<MetadataQueryInstanceTypeField>,
+    id: string,
 };
 
 type MetadataFieldValue = string | number | Array<any>;
@@ -345,7 +396,6 @@ type JSONPatch = {
 type JSONPatchOperations = Array<JSONPatch>;
 
 type BoxItemVersion = {
-    action: 'upload' | 'delete' | 'restore',
     authenticated_download_url?: string,
     collaborators?: Object,
     created_at: string,
@@ -353,16 +403,20 @@ type BoxItemVersion = {
     id: string,
     is_download_available?: boolean,
     modified_at?: string,
-    modified_by: User,
+    modified_by: ?User,
     name?: string,
     permissions?: BoxItemVersionPermission,
+    restored_at?: string,
+    restored_by?: ?User,
+    retention?: BoxItemVersionRetention,
     sha1?: string,
     size?: number,
     trashed_at: ?string,
-    type: string,
+    trashed_by?: ?User,
+    type: 'file_version',
     version_end?: number,
     version_number: string,
-    version_restored?: string,
+    version_promoted?: string,
     version_start?: number,
     versions?: Array<BoxItemVersion>,
 };
@@ -392,12 +446,15 @@ type BoxItem = {
     parent?: BoxItem,
     path_collection?: BoxPathCollection,
     permissions?: BoxItemPermission,
+    representations?: FileRepresentationResponse,
     restored_from?: BoxItemVersion,
     selected?: boolean,
     shared_link?: SharedLink,
     size?: number,
+    thumbnailUrl?: ?string,
     type?: ItemType,
     url?: string,
+    version_limit?: ?number,
     version_number?: string,
 };
 
@@ -470,6 +527,25 @@ type Collection = {
     totalCount?: number,
 };
 
+type FileRepresentationResponse = {
+    entries: Array<FileRepresentation>,
+};
+
+type FileRepresentation = {
+    content?: {
+        url_template: string,
+    },
+    properties?: {
+        dimensions: string,
+        paged: string,
+        thumb: string,
+    },
+    representation?: string,
+    status: {
+        state: string,
+    },
+};
+
 type FolderUploadItem = {
     boxFile?: BoxItem,
     error?: Object,
@@ -536,6 +612,7 @@ type Options = {
     consoleError?: boolean,
     consoleLog?: boolean,
     id?: string,
+    language?: string,
     requestInterceptor?: Function,
     responseInterceptor?: Function,
     retryableStatusCodes?: Array<number>,
@@ -606,145 +683,19 @@ type FileAccessStats = {
     preview_count?: number,
 };
 
-type TaskAssignment = {
-    assigned_to: User,
-    id: string,
-    status: TaskAssignmentStatus,
-    type: 'task_assignment',
-};
-
-type TaskAssignments = {
-    entries: Array<TaskAssignment>,
-    total_count: number,
-};
-
+// this is a subset of TaskNew, which imports as `any`
 type Task = {
     created_at: string,
     created_by: User,
-    due_at?: string,
     id: string,
-    message: string,
-    task_assignment_collection: TaskAssignments,
+    permissions: BoxTaskPermission,
     type: 'task',
 };
 
 type Tasks = {
     entries: Array<Task>,
-    total_count: number,
-};
-
-/* New Task Types START */
-
-type ID = string;
-type ISODate = string;
-
-type UserMini = User;
-
-type FileMini = {
-    id: ID,
-    name: string,
-    type: 'file',
-};
-
-type FolderMini = {
-    id: ID,
-    name: string,
-    type: 'folder',
-};
-
-type TaskCollabStatus = 'APPROVED' | 'REJECTED' | 'COMPLETED' | 'NOT_STARTED';
-
-type TaskStatus = TaskCollabStatus | 'IN_PROGRESS';
-
-type TaskMini = {|
-    created_at: ISODate,
-    id: ID,
-    modified_at: ISODate,
-    status: TaskStatus,
-    type: 'task',
-|};
-
-type TaskCollabRole = 'CREATOR' | 'ASSIGNEE';
-
-type TaskCollab<R> = {|
-    completed_at?: ?ISODate,
-    id: ID,
-    role: R,
-    status: TaskCollabStatus,
-    target: UserMini,
-    task?: TaskMini,
-    type: 'task_collaborator',
-|};
-
-type TaskCollabCreator = TaskCollab<'CREATOR'>;
-
-type TaskCollabAssignee = {|
-    ...TaskCollab<'ASSIGNEE'>,
-    permissions: {|
-        can_delete: boolean,
-        can_update: boolean,
-    |},
-|};
-
-type TaskLink = {|
-    description?: string,
-    id: ID,
-    permissions: {|
-        can_delete: boolean,
-        can_update: boolean,
-    |},
-    target?: ?FileMini | ?FolderMini | ?UserMini,
-    task?: TaskMini,
-    type: 'task_link',
-|};
-
-type MarkerPaginatedCollection<T> = {
-    entries: T[],
-    limit: number,
     next_marker: ?string,
 };
-
-type TaskAssigneeCollection = MarkerPaginatedCollection<TaskCollabAssignee>;
-
-type TaskLinkCollection = MarkerPaginatedCollection<TaskLink>;
-
-// See https://github.com/facebook/flow/issues/7574
-// This is currently *not* enforcing the constant types
-// type TaskType = typeof TASK_TYPE_GENERAL | typeof TASK_TYPE_APPROVAL;
-// type TaskEditMode = typeof TASK_EDIT_MODE_CREATE | typeof TASK_EDIT_MODE_EDIT;
-type TaskType = 'GENERAL' | 'APPROVAL';
-type TaskEditMode = 'CREATE' | 'EDIT';
-
-type TaskNew = {|
-    assigned_to: TaskAssigneeCollection,
-    completed_at?: ?ISODate,
-    completion_rule?: 'ANY_ASSIGNEE' | 'ALL_ASSIGNEES',
-    created_at: ISODate,
-    created_by: TaskCollabCreator,
-    description: string,
-    due_at?: ?ISODate,
-    id: ID,
-    modified_at?: ISODate,
-    permissions: {|
-        can_create_task_collaborator: boolean,
-        can_create_task_link: boolean,
-        can_delete: boolean,
-        can_update: boolean,
-    |},
-    progress_at?: ?ISODate,
-    status: TaskStatus,
-    task_links: TaskLinkCollection,
-    task_type: TaskType,
-    type: 'task',
-|};
-
-type TaskPayload = {
-    description: string,
-    due_at?: ?string,
-    task_type: TaskType,
-};
-
-/* New Task Types END */
 
 type Comment = {
     created_at: string,
@@ -753,6 +704,7 @@ type Comment = {
     is_reply_comment?: boolean,
     message?: string,
     modified_at: string,
+    permissions: BoxCommentPermission,
     tagged_message: string,
     type: 'comment',
 };
@@ -774,40 +726,43 @@ type AppItem = {|
     type: 'app',
 |};
 
-type BaseAppActivityItem = {
+type BaseAppActivityItem = {|
     activity_template: ActivityTemplateItem,
     app: AppItem,
     created_by: User,
     id: string,
     rendered_text: string,
     type: 'app_activity',
-};
+|};
 
-type AppActivityAPIItem = {
+type AppActivityAPIItem = {|
     occurred_at: string,
-} & BaseAppActivityItem;
+    ...BaseAppActivityItem,
+|};
 
 type AppActivityAPIItems = {
     entries: Array<AppActivityAPIItem>,
     total_count: number,
 };
 
-type AppActivityItem = {
+type AppActivityItem = {|
     created_at: string,
     permissions: BoxItemPermission,
-} & BaseAppActivityItem;
+    ...BaseAppActivityItem,
+|};
 
 type AppActivityItems = {
     entries: Array<AppActivityItem>,
     total_count: number,
 };
 
-type FeedItem = Comment | Task | TaskNew | BoxItemVersion | AppActivityItem;
+type FeedItem = Comment | Task | BoxItemVersion | AppActivityItem;
+
 type FeedItems = Array<FeedItem>;
 
 type Collaborators = {
     entries: Array<SelectorItem>,
-    next_marker: 'string' | null,
+    next_marker: ?string,
 };
 
 type Translations = {
@@ -874,12 +829,6 @@ type AdditionalSidebarTab = {
 
 type Alignment = 'left' | 'right';
 
-type SidebarView =
-    | typeof SIDEBAR_VIEW_SKILLS
-    | typeof SIDEBAR_VIEW_DETAILS
-    | typeof SIDEBAR_VIEW_METADATA
-    | typeof SIDEBAR_VIEW_ACTIVITY;
-
 type FileSystemFileEntry = {
     createReader: Function,
     file: Function,
@@ -942,8 +891,8 @@ type ErrorContextProps = {
 type ElementsErrorCallback = (e: ElementsXhrError, code: string, contextInfo?: Object) => void;
 
 type ClassificationInfo = {
-    description: ?string,
-    type: ?string,
+    definition?: string,
+    name: string,
 };
 
 type MetricType =
@@ -970,13 +919,12 @@ type WithLoggerProps = {
 };
 
 type ActivityFeedFeatures = {
-    tasks?: {|
-        createButton?: boolean, // Show the Create Task button (requires newApi)
-        createFromComment?: boolean, // Show the Add Task checkbox
-        feedbackUrl?: string, // URL used for feedback form for tasks
-        newApi?: boolean, // Use new service
-        newCards?: boolean, // Show new task card layout (requires on newApi)
-    |},
+    appActivity: {
+        enabled: boolean,
+    },
+    tasks: {
+        anyTask: boolean,
+    },
 };
 
 type ContentSidebarFeatures = {
@@ -991,5 +939,3 @@ type AdditionalVersionInfo = {
     currentVersionId?: ?string,
     updateVersionToCurrent: () => void,
 };
-
-type OnVersionChange = (version: ?BoxItemVersion, additionalVersionInfo: ?AdditionalVersionInfo) => void;

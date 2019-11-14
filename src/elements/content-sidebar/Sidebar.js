@@ -7,6 +7,7 @@
 import * as React from 'react';
 import classNames from 'classnames';
 import flow from 'lodash/flow';
+import getProp from 'lodash/get';
 import uniqueid from 'lodash/uniqueId';
 import { withRouter } from 'react-router-dom';
 import type { Location, RouterHistory } from 'react-router-dom';
@@ -15,11 +16,12 @@ import LocalStore from '../../utils/LocalStore';
 import SidebarNav from './SidebarNav';
 import SidebarPanels from './SidebarPanels';
 import SidebarUtils from './SidebarUtils';
-import { isFeatureEnabled, withFeatureConsumer } from '../common/feature-checking';
+import { withFeatureConsumer } from '../common/feature-checking';
+import type { FeatureConfig } from '../common/feature-checking';
 import type { ActivitySidebarProps } from './ActivitySidebar';
 import type { DetailsSidebarProps } from './DetailsSidebar';
 import type { MetadataSidebarProps } from './MetadataSidebar';
-import type { FeatureConfig } from '../common/feature-checking';
+import type { VersionsSidebarProps } from './versions';
 
 type Props = {
     activitySidebarProps: ActivitySidebarProps,
@@ -36,19 +38,20 @@ type Props = {
     hasAdditionalTabs: boolean,
     hasMetadata: boolean,
     hasSkills: boolean,
+    hasVersions: boolean,
     history: RouterHistory,
-    isLarge?: boolean,
+    isDefaultOpen?: boolean,
     isLoading?: boolean,
     location: Location,
     metadataEditors?: Array<MetadataEditor>,
     metadataSidebarProps: MetadataSidebarProps,
     onVersionChange?: Function,
     onVersionHistoryClick?: Function,
+    versionsSidebarProps: VersionsSidebarProps,
 };
 
 type State = {
     isDirty: boolean,
-    isOpen: boolean, // Local isOpen state consists of stored forced state (if any) and responsive adjustments
 };
 
 export const SIDEBAR_FORCE_KEY: 'bcs.force' = 'bcs.force';
@@ -56,64 +59,51 @@ export const SIDEBAR_FORCE_VALUE_CLOSED: 'closed' = 'closed';
 export const SIDEBAR_FORCE_VALUE_OPEN: 'open' = 'open';
 
 class Sidebar extends React.Component<Props, State> {
+    static defaultProps = {
+        isDefaultOpen: true,
+        isLoading: false,
+    };
+
     id: string = uniqueid('bcs_');
 
     props: Props;
+
+    sidebarPanels: { current: null | SidebarPanels } = React.createRef();
 
     state: State;
 
     store: LocalStore = new LocalStore();
 
-    static defaultProps = {
-        isLarge: true,
-        isLoading: false,
-    };
-
     constructor(props: Props) {
         super(props);
 
-        const { isLarge } = this.props;
-
         this.state = {
-            isDirty: false,
-            isOpen: this.isForcedSet() ? this.isForcedOpen() : !!isLarge,
+            isDirty: this.getLocationState('open') || false,
         };
+
+        this.setForcedByLocation();
     }
 
     componentDidUpdate(prevProps: Props): void {
-        const { fileId, history, isLarge, location }: Props = this.props;
-        const { fileId: prevFileId, isLarge: prevIsLarge }: Props = prevProps;
-        const { isDirty, isOpen }: State = this.state;
-        const isForcedSet = this.isForcedSet();
+        const { fileId, history, location }: Props = this.props;
+        const { fileId: prevFileId, location: prevLocation }: Props = prevProps;
+        const { isDirty }: State = this.state;
 
-        // User navigated to a different file without ever navigating to a tab
+        // User navigated to a different file without ever navigating the sidebar
         if (!isDirty && fileId !== prevFileId && location.pathname !== '/') {
-            history.replace({ pathname: '/' });
+            history.replace({ pathname: '/', state: { silent: true } });
         }
 
-        // User resized their viewport without ever toggling the sidebar open/closed
-        if (!isForcedSet && isLarge !== prevIsLarge && isLarge !== isOpen) {
-            this.setState({ isOpen: isLarge });
+        // User navigated or toggled the sidebar intentionally, internally or externally
+        if (location !== prevLocation && !this.getLocationState('silent')) {
+            this.setForcedByLocation();
+            this.setState({ isDirty: true });
         }
     }
 
-    /**
-     * Handle sidebar navigation events
-     *
-     * @param {SyntheticEvent} event - The event
-     * @param {NavigateOptions} options - The navigation options
-     * @return {void}
-     */
-    handleNavigation = (event: SyntheticEvent<>, { isToggle }: NavigateOptions): void => {
-        const { isOpen }: State = this.state;
-
-        // Persist user preference for all future sessions in this browser
-        this.isForced(isToggle ? !isOpen : true);
-
-        this.setState({
-            isDirty: true, // Set dirty state if user has ever clicked on a tab
-            isOpen: this.isForcedOpen(),
-        });
+    getUrlPrefix = (pathname: string) => {
+        const basePath = pathname.substring(1).split('/')[0];
+        return basePath;
     };
 
     /**
@@ -123,14 +113,34 @@ class Sidebar extends React.Component<Props, State> {
      * @return {void}
      */
     handleVersionHistoryClick = (event: SyntheticEvent<>): void => {
-        const { history } = this.props;
+        const { file, history } = this.props;
+        const { file_version: currentVersion } = file;
+        const fileVersionSlug = currentVersion ? `/${currentVersion.id}` : '';
+
+        const urlPrefix = this.getUrlPrefix(history.location.pathname);
 
         if (event.preventDefault) {
             event.preventDefault();
         }
 
-        history.push(`${history.location.pathname}/versions`);
+        history.push(`/${urlPrefix}/versions${fileVersionSlug}`);
     };
+
+    /**
+     * Getter for location state properties.
+     *
+     * NOTE: Each location on the history stack has its own optional state object that is wholly separate from
+     * this component's internal state. Values on the location state object can persist even between refreshes
+     * when using certain history contexts, such as BrowserHistory.
+     *
+     * @param key - Optionally get a specific key value from state
+     * @returns {any} - The location state or state key value
+     */
+    getLocationState(key?: string): any {
+        const { location } = this.props;
+        const { state: locationState = {} } = location;
+        return getProp(locationState, key);
+    }
 
     /**
      * Getter/setter for sidebar forced state
@@ -151,7 +161,7 @@ class Sidebar extends React.Component<Props, State> {
      * @returns {boolean} - True if the sidebar has been forced open
      */
     isForcedOpen(): boolean {
-        return this.isForced() !== SIDEBAR_FORCE_VALUE_CLOSED;
+        return this.isForced() === SIDEBAR_FORCE_VALUE_OPEN;
     }
 
     /**
@@ -162,6 +172,29 @@ class Sidebar extends React.Component<Props, State> {
         return this.isForced() !== null;
     }
 
+    /**
+     * Refreshes the sidebar panel
+     * @returns {void}
+     */
+    refresh(): void {
+        const { current: sidebarPanels } = this.sidebarPanels;
+
+        if (sidebarPanels) {
+            sidebarPanels.refresh();
+        }
+    }
+
+    /**
+     * Helper to set the local store open state based on the location open state, if defined
+     */
+    setForcedByLocation(): void {
+        const isLocationOpen: ?boolean = this.getLocationState('open');
+
+        if (isLocationOpen !== undefined && isLocationOpen !== null) {
+            this.isForced(isLocationOpen);
+        }
+    }
+
     render() {
         const {
             activitySidebarProps,
@@ -169,24 +202,24 @@ class Sidebar extends React.Component<Props, State> {
             className,
             currentUser,
             detailsSidebarProps,
-            features,
             file,
             fileId,
             getPreview,
             getViewer,
-            hasActivityFeed,
             hasAdditionalTabs,
+            hasVersions,
+            isDefaultOpen,
             isLoading,
             metadataEditors,
             metadataSidebarProps,
             onVersionChange,
+            versionsSidebarProps,
         }: Props = this.props;
-
-        const { isOpen } = this.state;
+        const isOpen = this.isForcedSet() ? this.isForcedOpen() : !!isDefaultOpen;
+        const hasActivity = SidebarUtils.canHaveActivitySidebar(this.props);
         const hasDetails = SidebarUtils.canHaveDetailsSidebar(this.props);
         const hasMetadata = SidebarUtils.shouldRenderMetadataSidebar(this.props, metadataEditors);
         const hasSkills = SidebarUtils.shouldRenderSkillsSidebar(this.props, file);
-        const hasVersions = isFeatureEnabled(features, 'versions');
         const onVersionHistoryClick = hasVersions ? this.handleVersionHistoryClick : this.props.onVersionHistoryClick;
         const styleClassName = classNames('be bcs', className, {
             'bcs-is-open': isOpen,
@@ -199,27 +232,28 @@ class Sidebar extends React.Component<Props, State> {
                         <LoadingIndicator />
                     </div>
                 ) : (
-                    <React.Fragment>
+                    <>
                         <SidebarNav
                             additionalTabs={additionalTabs}
+                            elementId={this.id}
                             fileId={fileId}
+                            hasActivity={hasActivity}
                             hasAdditionalTabs={hasAdditionalTabs}
-                            hasSkills={hasSkills}
-                            hasMetadata={hasMetadata}
-                            hasActivityFeed={hasActivityFeed}
                             hasDetails={hasDetails}
+                            hasMetadata={hasMetadata}
+                            hasSkills={hasSkills}
                             isOpen={isOpen}
-                            onNavigate={this.handleNavigation}
                         />
                         <SidebarPanels
                             activitySidebarProps={activitySidebarProps}
                             currentUser={currentUser}
+                            elementId={this.id}
                             detailsSidebarProps={detailsSidebarProps}
                             file={file}
                             fileId={fileId}
                             getPreview={getPreview}
                             getViewer={getViewer}
-                            hasActivityFeed={hasActivityFeed}
+                            hasActivity={hasActivity}
                             hasDetails={hasDetails}
                             hasMetadata={hasMetadata}
                             hasSkills={hasSkills}
@@ -229,8 +263,10 @@ class Sidebar extends React.Component<Props, State> {
                             metadataSidebarProps={metadataSidebarProps}
                             onVersionChange={onVersionChange}
                             onVersionHistoryClick={onVersionHistoryClick}
+                            ref={this.sidebarPanels}
+                            versionsSidebarProps={versionsSidebarProps}
                         />
-                    </React.Fragment>
+                    </>
                 )}
             </aside>
         );

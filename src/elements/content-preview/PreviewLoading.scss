@@ -1,14 +1,15 @@
 @import '../common/variables';
 
-.bcpr {
-    .bcpr-loading {
-        color: $twos;
-        position: relative;
-        text-align: center;
-        z-index: 1;
+.bcpr-PreviewLoading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: $bdl-gray;
+    text-align: center;
+}
 
-        .bcpr-loading-text {
-            font-size: 14px;
-        }
-    }
+.bcpr-PreviewLoading-message {
+    max-width: 400px;
+    margin-top: 20px;
+    font-size: 14px;
 }
